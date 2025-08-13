@@ -17,12 +17,12 @@ warnings.filterwarnings('ignore')
 # Embed the core classes here for Streamlit Cloud compatibility
 # [We'll include simplified versions of the key classes]
 
-st.set_page_config(
-    page_title="Fantasy Football Predictor",
-    page_icon="⚽",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+#st.set_page_config(
+    #page_title="Fantasy Football Predictor",
+    #page_icon="⚽",
+    #layout="wide",
+    #initial_sidebar_state="expanded"
+#)
 
 def main():
     st.title("⚽ Fantasy Football Team Predictor")
