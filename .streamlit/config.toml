@@ -7,6 +7,4 @@ textColor = "#262730"
 [server]
 headless = true
 port = 8501
-
-[server]
 fileWatcherType = "polling"
