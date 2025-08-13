@@ -24,7 +24,7 @@ async def startup_event():
     """Initialize the application"""
     global knowledge_base
     # Initialize RAG system with Euri AI
-    euri_api_key = os.getenv("euri-21d56706b7e4b26bcb807414429834acc338f6104e46c3dfb59147eac5cfa1ac")
+    euri_api_key = os.getenv("EURI_API_KEY")
     if euri_api_key:
         knowledge_base = FPLKnowledgeBase(
             euri_api_key=euri_api_key,
@@ -122,4 +122,4 @@ async def get_player_details(player_id: int):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8003)
