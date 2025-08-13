@@ -9,7 +9,7 @@ from typing import List, Dict
 
 class FPLKnowledgeBase:
     def __init__(self, euri_api_key: str, model: str = "gemini-2.5-pro"):
-        self.euri_api_key = "euri-21d56706b7e4b26bcb807414429834acc338f6104e46c3dfb59147eac5cfa1ac"
+        self.euri_api_key = os.getenv("EURI_API_KEY")
         self.model = model
         
         # Initialize Euri AI client for direct API calls
@@ -280,6 +280,8 @@ FPL Transfer Strategy:
 FPL_KNOWLEDGE = [
     """
     Fantasy Premier League Strategy Guide:
+
+    Always use the latest FPL data from the latest 2025-2026 English Premier League.
     
     Captain Selection: Always captain players with the highest expected points.
     Consider fixture difficulty, form, and historical performance.
