@@ -28,7 +28,7 @@ async def startup_event():
     if euri_api_key:
         knowledge_base = FPLKnowledgeBase(
             euri_api_key=euri_api_key,
-            model="gpt-4.1-nano"  # Fast and efficient model for strategic advice
+            model="gemini-2.5-pro"  # Fast and efficient model for strategic advice
         )
         knowledge_base.create_knowledge_base([
             FPL_GENERAL_STRATEGY_CONTEXT,
