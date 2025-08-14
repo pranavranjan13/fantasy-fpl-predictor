@@ -11,7 +11,7 @@ pydantic==2.5.0
 python-multipart==0.0.6
 langchain==0.0.340
 chromadb==0.4.15
-euriai[langchain]==*
+euriai[langchain]
 plotly==5.17.0
 seaborn==0.13.0
 matplotlib==3.8.2
