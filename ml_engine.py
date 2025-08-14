@@ -5,7 +5,7 @@ from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 import xgboost as xgb
-from typing import Tuple, List
+from typing import Tuple, List, Dict
 import joblib
 import warnings
 warnings.filterwarnings('ignore')
