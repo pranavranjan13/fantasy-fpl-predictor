@@ -4,32 +4,34 @@ import json
 from typing import Dict, List
 import asyncio
 import httpx
+# Import Player and Position from models.py
+from models import Player, Position
 
 class FPLDataFetcher:
     def __init__(self):
         self.base_url = "https://fantasy.premierleague.com/api"
         self.session = requests.Session()
-        
+
     def fetch_bootstrap_data(self) -> Dict:
         """Fetch general game data including players, teams, and game settings"""
         response = self.session.get(f"{self.base_url}/bootstrap-static/")
         return response.json()
-    
+
     def fetch_player_data(self, player_id: int) -> Dict:
         """Fetch detailed data for a specific player"""
         response = self.session.get(f"{self.base_url}/element-summary/{player_id}/")
         return response.json()
-    
+
     def fetch_fixtures(self) -> List[Dict]:
         """Fetch fixture data"""
         response = self.session.get(f"{self.base_url}/fixtures/")
         return response.json()
-    
+
     def fetch_gameweek_data(self, gameweek: int) -> Dict:
         """Fetch live data for a specific gameweek"""
         response = self.session.get(f"{self.base_url}/event/{gameweek}/live/")
         return response.json()
-    
+
     async def fetch_all_player_details(self, player_ids: List[int]) -> List[Dict]:
         """Fetch detailed data for multiple players asynchronously"""
         async with httpx.AsyncClient() as client:
@@ -39,13 +41,12 @@ class FPLDataFetcher:
             ]
             responses = await asyncio.gather(*tasks)
             return [response.json() for response in responses]
-    
+
     def process_bootstrap_to_players(self, bootstrap_data: Dict) -> List[Player]:
         """Convert bootstrap data to Player objects"""
         players = []
         teams = {team['id']: team['name'] for team in bootstrap_data['teams']}
         positions = {pos['id']: pos['singular_name_short'] for pos in bootstrap_data['element_types']}
-        
         for element in bootstrap_data['elements']:
             player = Player(
                 id=element['id'],
@@ -79,5 +80,4 @@ class FPLDataFetcher:
                 expected_goal_involvements=float(element.get('expected_goal_involvements', 0))
             )
             players.append(player)
-        
         return players
