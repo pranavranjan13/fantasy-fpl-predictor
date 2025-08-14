@@ -1,36 +1,26 @@
 from setuptools import setup, find_packages
 
-with open("README.md", "r", encoding="utf-8") as fh:
-    long_description = fh.read()
-
-with open("requirements.txt", "r", encoding="utf-8") as fh:
-    requirements = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
-
 setup(
     name="fantasy-football-predictor",
     version="1.0.0",
-    author="Your Name",
-    author_email="your.email@example.com",
-    description="AI-powered Fantasy Football prediction application",
-    long_description=long_description,
-    long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/fantasy-football-predictor",
     packages=find_packages(),
-    classifiers=[
-        "Development Status :: 4 - Beta",
-        "Intended Audience :: End Users/Desktop",
-        "License :: OSI Approved :: MIT License",
-        "Operating System :: OS Independent",
-        "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.9",
-        "Programming Language :: Python :: 3.10",
-        "Programming Language :: Python :: 3.11",
+    install_requires=[
+        "fastapi>=0.104.1",
+        "uvicorn>=0.24.0",
+        "streamlit>=1.28.0",
+        "pandas>=2.1.3",
+        "numpy>=1.24.3",
+        "scikit-learn>=1.3.2",
+        "xgboost>=2.0.0",
+        "requests>=2.31.0",
+        "httpx>=0.25.2",
+        "pydantic>=2.5.0",
+        "python-multipart>=0.0.6",
+        "euriai[langchain]>=*",
+        "plotly>=5.17.0",
+        "seaborn>=0.13.0",
+        "matplotlib>=3.8.2",
+        "pulp>=2.7.0"
     ],
     python_requires=">=3.9",
-    install_requires=requirements,
-    entry_points={
-        "console_scripts": [
-            "fantasy-app=app.main:main",
-        ],
-    },
 )

@@ -5,7 +5,7 @@ from typing import Dict, List
 import asyncio
 import httpx
 # Import Player and Position from models.py
-from models import Player, Position
+from backend.models import Player, Position
 
 class FPLDataFetcher:
     def __init__(self):

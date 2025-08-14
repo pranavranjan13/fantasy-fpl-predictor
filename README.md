@@ -1,31 +1,29 @@
-# Fantasy Premier League Predictor 🏆
+# Fantasy Football Prediction Application
 
-An AI-powered Fantasy Premier League team predictor that uses machine learning to optimize team selection and provide strategic insights.
+A comprehensive AI-powered fantasy football application that predicts optimal team selections, provides strategic advice, and recommends chip usage timing.
 
-## 🚀 Live Demo
+## Features
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://your-app-name.streamlit.app/)
+- **Team Optimization**: Uses linear programming to select optimal 15-player squads
+- **ML Predictions**: Ensemble models (Random Forest, XGBoost, Gradient Boosting) for player performance prediction
+- **RAG System**: Retrieval-Augmented Generation for strategic advice and chip recommendations
+- **Real-time Data**: Fetches live data from Fantasy Premier League API
+- **Interactive Dashboard**: Streamlit-based frontend with visualizations and analytics
 
-## ✨ Features
+## Architecture
 
-- **Team Optimization**: ML-powered optimal team selection
-- **Player Analysis**: Performance predictions and comparisons  
-- **Strategic Advice**: AI-driven insights for transfers and captaincy
-- **Chip Strategy**: Recommendations for when to use chips
-- **Real-time Data**: Live FPL API integration
-- **Interactive Dashboard**: Beautiful visualizations and analytics
+- **Backend**: FastAPI with async endpoints
+- **Frontend**: Streamlit with interactive visualizations
+- **ML Engine**: Scikit-learn, XGBoost for predictions
+- **RAG System**: LangChain + OpenAI + ChromaDB
+- **Optimization**: PuLP for linear programming
+- **Data Source**: Official FPL API
 
-## 🛠️ Tech Stack
+## Installation
 
-- **Frontend**: Streamlit
-- **ML**: Scikit-learn, XGBoost
-- **Optimization**: Linear Programming (PuLP)
-- **Data**: Official FPL API
-- **Visualization**: Plotly, Seaborn
+1. **Clone the repository**
 
-## 🚀 Quick Start
-
-1. Clone the repository:
 ```bash
-git clone https://github.com/pranavranjan13/fantasy-fpl-predictor.git
-cd fantasy-fpl-predictor
+git clone <repository-url>
+cd fantasy-football-predictor
+```

@@ -4,6 +4,8 @@ RUN pip uninstall -y pydantic || true
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+RUN pip install --force-reinstall "pydantic>=2.5.0"
 COPY . .
 
 EXPOSE 8501
