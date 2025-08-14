@@ -8,6 +8,7 @@ import os
 from typing import List, Dict
 # Import ChipRecommendation, ChipType from models.py
 from models import ChipRecommendation, ChipType
+from models import Player
 
 # Enhanced FPL knowledge base with more detailed strategic content
 FPL_GENERAL_STRATEGY_CONTEXT = """
