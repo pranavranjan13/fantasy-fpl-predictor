@@ -9,7 +9,7 @@ from models import PredictionRequest, TeamConstraints, ChipType, ChipRecommendat
 from data_fetcher import FPLDataFetcher
 from ml_engine import PlayerPerformancePredictor
 from rag import FPLKnowledgeBase, FPL_GENERAL_STRATEGY_CONTEXT, FPL_CHIP_STRATEGY_CONTEXT, FPL_CAPTAIN_STRATEGY_CONTEXT, FPL_TRANSFER_STRATEGY_CONTEXT # Imported constants
-
+from models import Player
 app = FastAPI(title="Fantasy Football Prediction API", version="1.0.0")
 
 # Add CORS middleware
