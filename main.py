@@ -1,7 +1,14 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
+import os # Added import for os module
 from typing import Optional
+
+# Import classes from other files
+from models import PredictionRequest, TeamConstraints, ChipType, ChipRecommendation # Added ChipType, ChipRecommendation
+from data_fetcher import FPLDataFetcher
+from ml_engine import PlayerPerformancePredictor
+from rag import FPLKnowledgeBase, FPL_GENERAL_STRATEGY_CONTEXT, FPL_CHIP_STRATEGY_CONTEXT, FPL_CAPTAIN_STRATEGY_CONTEXT, FPL_TRANSFER_STRATEGY_CONTEXT # Imported constants
 
 app = FastAPI(title="Fantasy Football Prediction API", version="1.0.0")
 
@@ -28,11 +35,11 @@ async def startup_event():
     if euri_api_key:
         knowledge_base = FPLKnowledgeBase(
             euri_api_key=euri_api_key,
-            model="gemini-2.5-pro"  # Fast and efficient model for strategic advice
+            model="gemini-2.5-flash"  # Fast and efficient model for strategic advice
         )
         knowledge_base.create_knowledge_base([
             FPL_GENERAL_STRATEGY_CONTEXT,
-            FPL_CHIP_STRATEGY_CONTEXT, 
+            FPL_CHIP_STRATEGY_CONTEXT,
             FPL_CAPTAIN_STRATEGY_CONTEXT,
             FPL_TRANSFER_STRATEGY_CONTEXT
         ])
@@ -57,21 +64,16 @@ async def predict_team(request: PredictionRequest):
         # Fetch current player data
         bootstrap_data = data_fetcher.fetch_bootstrap_data()
         players = data_fetcher.process_bootstrap_to_players(bootstrap_data)
-        
         # Train ML models (in production, this would be cached)
         player_df = predictor.prepare_features(players)
         predictor.train_position_models(player_df)
-        
         # Get predictions
         predictions = predictor.predict_next_gameweek_points(players)
-        
         # Optimize team
         constraints = request.constraints or TeamConstraints()
         optimizer = TeamOptimizer(constraints)
         optimal_team = optimizer.optimize_team(players, predictions)
-        
         return optimal_team.dict()
-    
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -80,7 +82,6 @@ async def get_chip_recommendation(gameweek: int, available_chips: List[str] = No
     """Get chip usage recommendation"""
     try:
         fixtures = data_fetcher.fetch_fixtures()
-        
         if knowledge_base and available_chips:
             recommendation = knowledge_base.analyze_chip_strategy(
                 gameweek, fixtures, available_chips
@@ -95,7 +96,6 @@ async def get_chip_recommendation(gameweek: int, available_chips: List[str] = No
                 reasoning="Consider using wildcard during favorable fixture runs",
                 expected_benefit=10.0
             ).dict()
-    
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -122,4 +122,4 @@ async def get_player_details(player_id: int):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8003)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
