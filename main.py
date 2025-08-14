@@ -8,8 +8,9 @@ from typing import Optional
 from models import PredictionRequest, TeamConstraints, ChipType, ChipRecommendation # Added ChipType, ChipRecommendation
 from data_fetcher import FPLDataFetcher
 from ml_engine import PlayerPerformancePredictor
-from rag import FPLKnowledgeBase, FPL_GENERAL_STRATEGY_CONTEXT, FPL_CHIP_STRATEGY_CONTEXT, FPL_CAPTAIN_STRATEGY_CONTEXT, FPL_TRANSFER_STRATEGY_CONTEXT # Imported constants
-from models import Player
+from rag_system import FPLKnowledgeBase, FPL_GENERAL_STRATEGY_CONTEXT, FPL_CHIP_STRATEGY_CONTEXT, FPL_CAPTAIN_STRATEGY_CONTEXT, FPL_TRANSFER_STRATEGY_CONTEXT # Imported constants
+from models import Player, Position
+from team_optimizer import TeamOptimizer
 app = FastAPI(title="Fantasy Football Prediction API", version="1.0.0")
 
 # Add CORS middleware
