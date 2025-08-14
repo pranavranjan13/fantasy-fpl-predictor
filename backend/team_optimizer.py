@@ -4,6 +4,12 @@ import pandas as pd
 # Import Player, Position, TeamConstraints, TeamSelection from models.py
 from models import Player, Position, TeamConstraints, TeamSelection
 
+import pydantic
+from pydantic import Field
+print("PYDANTIC VERSION:", pydantic.__version__)
+print("Field function:", Field)
+print("Field doc:", Field.__doc__)
+
 class TeamOptimizer:
     def __init__(self, constraints: TeamConstraints):
         self.constraints = constraints
