@@ -8,12 +8,12 @@ import os # Added import for os module
 from typing import Optional
 
 # Import classes from other files
-from backend.models import PredictionRequest, TeamConstraints, ChipType, ChipRecommendation # Added ChipType, ChipRecommendation
-from backend.data_fetcher import FPLDataFetcher
-from backend.ml_engine import PlayerPerformancePredictor
-from backend.rag_system import FPLKnowledgeBase, FPL_GENERAL_STRATEGY_CONTEXT, FPL_CHIP_STRATEGY_CONTEXT, FPL_CAPTAIN_STRATEGY_CONTEXT, FPL_TRANSFER_STRATEGY_CONTEXT # Imported constants
-from backend.models import Player, Position
-from backend.team_optimizer import TeamOptimizer
+from models import PredictionRequest, TeamConstraints, ChipType, ChipRecommendation # Added ChipType, ChipRecommendation
+from data_fetcher import FPLDataFetcher
+from ml_engine import PlayerPerformancePredictor
+from rag_system import FPLKnowledgeBase, FPL_GENERAL_STRATEGY_CONTEXT, FPL_CHIP_STRATEGY_CONTEXT, FPL_CAPTAIN_STRATEGY_CONTEXT, FPL_TRANSFER_STRATEGY_CONTEXT # Imported constants
+from models import Player, Position
+from team_optimizer import TeamOptimizer
 app = FastAPI(title="Fantasy Football Prediction API", version="1.0.0")
 
 # Add CORS middleware
