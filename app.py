@@ -341,7 +341,7 @@ class EnhancedFPLPredictor:
             'total_cost': total_cost
         }
 
-    def suggest_optimal_starting_eleven(self, team_players=None):
+def suggest_optimal_starting_eleven(self, team_players=None):
     import pandas as pd
     if team_players is None:
         team_players = self.players_df
