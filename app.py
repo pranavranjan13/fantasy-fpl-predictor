@@ -342,34 +342,42 @@ class EnhancedFPLPredictor:
         }
 
     def suggest_optimal_starting_eleven(self, team_players=None):
-        if team_players is None:
-            team_players = self.players_df
-        formations = [
-            {'Defender': 3, 'Midfielder': 4, 'Forward': 3},
-            {'Defender': 3, 'Midfielder': 5, 'Forward': 2},
-            {'Defender': 4, 'Midfielder': 4, 'Forward': 2}
-        ]
-        for formation in formations:
-            xi = []
-            gks = team_players[team_players['position'] == 'Goalkeeper']
-            if len(gks) < 1:
-                continue
-            gk = gks.sort_values('total_points_per_game', ascending=False).iloc[0]
-            xi.append(gk)
-            valid = True
-            for pos in ['Defender', 'Midfielder', 'Forward']:
-                players = team_players[team_players['position'] == pos]
-                if len(players) < formation[pos]:
-                    valid = False
-                    break
-                pos_players = players.sort_values('total_points_per_game', ascending=False).iloc[:formation[pos]]
-                xi.extend(list(pos_players))
-            if valid and len(xi) == 11:
-                return {
-                    'players': pd.DataFrame(xi),
-                    'formation': formation
-                }
-        return {'error': 'Insufficient players for any valid formation'}
+    import pandas as pd
+    if team_players is None:
+        team_players = self.players_df
+    # Convert to DataFrame if not already
+    if isinstance(team_players, list):
+        team_players = pd.DataFrame(team_players)
+    # Defensive: check for key DataFrame columns
+    if 'position' not in team_players.columns or 'total_points_per_game' not in team_players.columns:
+        raise ValueError("team_players must be a DataFrame with 'position' and 'total_points_per_game' columns.")
+    team_players = team_players.copy()
+    formations = [
+        {'Defender': 3, 'Midfielder': 4, 'Forward': 3},
+        {'Defender': 3, 'Midfielder': 5, 'Forward': 2},
+        {'Defender': 4, 'Midfielder': 4, 'Forward': 2}
+    ]
+    for formation in formations:
+        xi = []
+        gks = team_players[team_players['position'].str.strip().str.title() == 'Goalkeeper']
+        if len(gks) < 1:
+            continue
+        gk = gks.sort_values('total_points_per_game', ascending=False).iloc[0]
+        xi.append(gk)
+        valid = True
+        for pos in ['Defender', 'Midfielder', 'Forward']:
+            players = team_players[team_players['position'].str.strip().str.title() == pos]
+            if len(players) < formation[pos]:
+                valid = False
+                break
+            pos_players = players.sort_values('total_points_per_game', ascending=False).iloc[:formation[pos]]
+            xi.extend(list(pos_players.itertuples(index=False)))
+        if valid and len(xi) == 11:
+            return {
+                'players': pd.DataFrame([player._asdict() if hasattr(player, "_asdict") else dict(player) for player in xi]),
+                'formation': formation
+            }
+    return {'error': 'Insufficient players for any valid formation'}
 
 class FPLChatBot:
     """Enhanced chatbot using EuriAI for FPL strategy discussions"""
