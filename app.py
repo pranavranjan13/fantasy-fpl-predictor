@@ -266,6 +266,39 @@ class EnhancedFPLPredictor:
         self.position_limits = {'Goalkeeper': 2, 'Defender': 5, 'Midfielder': 5, 'Forward': 3}
         self.team_limit = 3
         
+        # Initialize required columns
+        self._initialize_required_columns()
+        
+    def _initialize_required_columns(self):
+        """Initialize or calculate all required columns"""
+        # Calculate games played
+        if 'games_played' not in self.players_df.columns:
+            self.calculate_games_played()
+            
+        # Calculate points per game
+        if 'total_points_per_game' not in self.players_df.columns:
+            self.calculate_total_points_per_game()
+            
+        # Calculate value metrics
+        if 'value' not in self.players_df.columns:
+            self.calculate_value()
+            
+        # Calculate form float
+        if 'form_float' not in self.players_df.columns:
+            self.calculate_form_float()
+            
+        # Calculate historical score
+        if 'historical_score' not in self.players_df.columns:
+            self.calculate_historical_score()
+            
+        # Calculate consistency score
+        if 'consistency_score' not in self.players_df.columns:
+            self.calculate_consistency_score()
+            
+        # Calculate starting XI probability
+        if 'starting_xi_probability' not in self.players_df.columns:
+            self.calculate_starting_xi_probability()
+            
     def calculate_games_played(self):
         """Calculate number of games played based on minutes"""
         # Calculate games_played as minutes divided by 90
@@ -275,21 +308,56 @@ class EnhancedFPLPredictor:
         
     def calculate_total_points_per_game(self):
         """Calculate points per game for players"""
-        # First ensure games_played exists
-        if 'games_played' not in self.players_df.columns:
-            self.calculate_games_played()
-        
         # Calculate points per game
         self.players_df['total_points_per_game'] = self.players_df['total_points'] / self.players_df['games_played']
         # Handle division by zero or NaN values
         self.players_df['total_points_per_game'] = self.players_df['total_points_per_game'].fillna(0)
         
+    def calculate_value(self):
+        """Calculate player value"""
+        self.players_df['value'] = self.players_df['now_cost'] / 10
+        
+    def calculate_form_float(self):
+        """Convert form to numeric value"""
+        self.players_df['form_float'] = pd.to_numeric(self.players_df['form'], errors='coerce')
+        
+    def calculate_historical_score(self):
+        """Calculate historical performance score"""
+        # Simulate historical data based on current performance
+        self.players_df['historical_score'] = self.players_df['total_points'] * 0.8
+        
+    def calculate_consistency_score(self):
+        """Calculate consistency score"""
+        # Simple moving average of points
+        window_size = 5
+        self.players_df['consistency_score'] = self.players_df['total_points'].rolling(window_size).mean()
+        
+    def calculate_starting_xi_probability(self):
+        """Calculate probability of being in starting XI"""
+        self.players_df['starting_xi_probability'] = 0.5
+        
+        # Minutes played factor
+        self.players_df['starting_xi_probability'] += self.players_df['minutes'].apply(lambda x: 
+            0.3 if x > 2000 else (
+            0.2 if x > 1500 else (
+            0.1 if x > 1000 else 0
+            )
+        ))
+        
+        # Form factor
+        self.players_df['starting_xi_probability'] += self.players_df['form_float'] / 10
+        
+        # Points per game factor
+        self.players_df['starting_xi_probability'] += self.players_df['total_points_per_game'] / 20
+        
+        # Ensure probability doesn't exceed 1.0
+        self.players_df['starting_xi_probability'] = self.players_df['starting_xi_probability'].clip(0, 1)
+        
     def optimize_team_selection(self, budget: float) -> dict:
         """Optimize team selection within the given budget"""
-        # Calculate required metrics if not already calculated
-        if 'total_points_per_game' not in self.players_df.columns:
-            self.calculate_total_points_per_game()
-            
+        # Ensure all required columns are calculated
+        self._initialize_required_columns()
+        
         # Filter players within budget
         filtered_players = self.players_df[self.players_df['now_cost'] <= budget]
         
@@ -333,7 +401,6 @@ class EnhancedFPLPredictor:
             'team': selected_players,
             'total_cost': sum(player['now_cost'] for player in selected_players)
         }
-
 
 class FPLChatBot:
     """Enhanced chatbot using EuriAI for FPL strategy discussions"""
