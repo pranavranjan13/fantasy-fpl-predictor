@@ -405,6 +405,55 @@ class EnhancedFPLPredictor:
             return result
         
         return {'error': 'Could not form valid starting XI with available players'}
+    
+    def optimize_team_selection(self, budget: float) -> dict:
+        """
+        Optimize team selection within the given budget
+        """
+        # Filter players within budget
+        filtered_players = self.players_df[self.players_df['now_cost'] <= budget]
+        
+        # Apply position limits
+        position_limits = self.position_limits.copy()
+        selected_players = []
+        remaining_budget = budget
+        
+        # Iterate through positions
+        for position in ['Goalkeeper', 'Defender', 'Midfielder', 'Forward']:
+            if position in position_limits:
+                max_players = position_limits[position]
+                
+                # Sort players by predicted points per £
+                position_players = filtered_players[filtered_players['position'] == position]
+                position_players = position_players.sort_values(by='total_points_per_game', ascending=False)
+                
+                # Select top players within budget
+                selected = []
+                for _, player in position_players.iterrows():
+                    if len(selected) < max_players and player['now_cost'] <= remaining_budget:
+                        selected.append(player)
+                        remaining_budget -= player['now_cost']
+                
+                selected_players.extend(selected)
+        
+        # Check team limits
+        team_counts = {}
+        for player in selected_players:
+            team = player['team']
+            if team in team_counts:
+                team_counts[team] += 1
+            else:
+                team_counts[team] = 1
+            
+            if team_counts[team] > self.team_limit:
+                # Remove players from teams that exceed the limit
+                selected_players = [p for p in selected_players if p['team'] != team or selected_players.index(p) < self.team_limit]
+        
+        return {
+            'team': selected_players,
+            'total_cost': sum(player['now_cost'] for player in selected_players)
+        }
+
 
 class FPLChatBot:
     """Enhanced chatbot using EuriAI for FPL strategy discussions"""
