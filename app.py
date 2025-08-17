@@ -265,7 +265,11 @@ class EnhancedFPLPredictor:
         self.players_df = players_df
         self.position_limits = {'Goalkeeper': 2, 'Defender': 5, 'Midfielder': 5, 'Forward': 3}
         self.team_limit = 3
-        
+
+    def calculate_total_points_per_game(self):
+        """Calculate points per game for players"""
+        self.players_df['total_points_per_game'] = self.players_df['total_points'] / self.players_df['games_played']
+
     def calculate_enhanced_predicted_points(self, gameweek: int = 1) -> pd.DataFrame:
         """Enhanced prediction using historical data"""
         df = self.players_df.copy()
@@ -407,9 +411,11 @@ class EnhancedFPLPredictor:
         return {'error': 'Could not form valid starting XI with available players'}
     
     def optimize_team_selection(self, budget: float) -> dict:
-        """
-        Optimize team selection within the given budget
-        """
+        """Optimize team selection within the given budget"""
+        # Calculate points per game if not already calculated
+        if 'total_points_per_game' not in self.players_df.columns:
+            self.calculate_total_points_per_game()
+            
         # Filter players within budget
         filtered_players = self.players_df[self.players_df['now_cost'] <= budget]
         
@@ -423,7 +429,7 @@ class EnhancedFPLPredictor:
             if position in position_limits:
                 max_players = position_limits[position]
                 
-                # Sort players by predicted points per £
+                # Sort players by points per game
                 position_players = filtered_players[filtered_players['position'] == position]
                 position_players = position_players.sort_values(by='total_points_per_game', ascending=False)
                 
