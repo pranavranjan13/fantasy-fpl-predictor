@@ -97,8 +97,22 @@ class FPLDataManager:
             players_df['points_per_million'] = players_df['total_points'] / players_df['value']
             players_df['form_float'] = pd.to_numeric(players_df['form'], errors='coerce')
             
-            return players_df
-        return pd.DataFrame()
+            # Ensure all relevant columns are numeric for calculations in FPLPredictor
+            numeric_cols_to_convert = [
+                'total_points',
+                'points_per_game', # Make sure this column exists in your raw data
+                'minutes',
+                'influence',
+                'creativity',
+                'threat',
+                'now_cost'
+            ]
+
+        for col in numeric_cols_to_convert:
+            if col in players_df.columns:
+                # Convert to numeric, coercing errors to NaN, then fill NaN with 0
+                players_df[col] = pd.to_numeric(players_df[col], errors='coerce').fillna(0)
+        return players_df
 
 class FPLPredictor:
     """AI-powered FPL predictions and recommendations"""
