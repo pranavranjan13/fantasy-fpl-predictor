@@ -1,0 +1,35 @@
+from setuptools import setup, find_packages
+
+setup(
+    name="fpl-ai-assistant",
+    version="1.0.0",
+    description="AI-powered Fantasy Premier League prediction and optimization tool",
+    packages=find_packages(),
+    install_requires=[
+        "streamlit>=1.28.0",
+        "pandas>=2.1.0",
+        "numpy>=1.24.3",
+        "requests>=2.31.0",
+        "plotly>=5.15.0",
+        "scikit-learn>=1.3.0",
+        "joblib>=1.3.2",
+        "euriai>=0.1.0",
+        "langchain-core>=0.1.0",
+        "sentence-transformers>=2.2.2",
+        "chromadb>=0.4.15",
+        "transformers>=4.33.0",
+        "torch>=2.0.1",
+        "scipy>=1.11.0",
+    ],
+    python_requires=">=3.8",
+    author="Pranav Ranjan",
+    author_email="ranjanpranav21@gmail.com",
+    classifiers=[
+        "Development Status :: 4 - Beta",
+        "Intended Audience :: End Users/Desktop",
+        "License :: OSI Approved :: MIT License",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+    ],
+)
