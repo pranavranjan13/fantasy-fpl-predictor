@@ -259,148 +259,117 @@ class FPLDataManager:
         return probabilities
 
 class EnhancedFPLPredictor:
-    """Enhanced predictor with historical data and better starting XI suggestions"""
-    
     def __init__(self, players_df):
         self.players_df = players_df
         self.position_limits = {'Goalkeeper': 2, 'Defender': 5, 'Midfielder': 5, 'Forward': 3}
         self.team_limit = 3
-        
-        # Initialize required columns
         self._initialize_required_columns()
-        
+
     def _initialize_required_columns(self):
-        """Initialize or calculate all required columns"""
-        # Calculate games played
+        if 'minutes' not in self.players_df.columns:
+            self.players_df['minutes'] = 0
         if 'games_played' not in self.players_df.columns:
             self.calculate_games_played()
-            
-        # Calculate points per game
         if 'total_points_per_game' not in self.players_df.columns:
             self.calculate_total_points_per_game()
-            
-        # Calculate value metrics
         if 'value' not in self.players_df.columns:
             self.calculate_value()
-            
-        # Calculate form float
         if 'form_float' not in self.players_df.columns:
             self.calculate_form_float()
-            
-        # Calculate historical score
         if 'historical_score' not in self.players_df.columns:
             self.calculate_historical_score()
-            
-        # Calculate consistency score
         if 'consistency_score' not in self.players_df.columns:
             self.calculate_consistency_score()
-            
-        # Calculate starting XI probability
         if 'starting_xi_probability' not in self.players_df.columns:
             self.calculate_starting_xi_probability()
-            
+
     def calculate_games_played(self):
-        """Calculate number of games played based on minutes"""
-        # Calculate games_played as minutes divided by 90
-        self.players_df['games_played'] = self.players_df['minutes'] / 90
-        # Replace division by zero or NaN values with 0
-        self.players_df['games_played'] = self.players_df['games_played'].fillna(0)
-        
+        self.players_df['games_played'] = (self.players_df['minutes'] / 90).fillna(0).replace([float('inf'), -float('inf')], 0)
+
     def calculate_total_points_per_game(self):
-        """Calculate points per game for players"""
-        # Calculate points per game
-        self.players_df['total_points_per_game'] = self.players_df['total_points'] / self.players_df['games_played']
-        # Handle division by zero or NaN values
-        self.players_df['total_points_per_game'] = self.players_df['total_points_per_game'].fillna(0)
-        
+        if 'games_played' not in self.players_df.columns:
+            self.calculate_games_played()
+        self.players_df['total_points_per_game'] = (self.players_df['total_points'] / self.players_df['games_played']).fillna(0).replace([float('inf'), -float('inf')], 0)
+
     def calculate_value(self):
-        """Calculate player value"""
-        self.players_df['value'] = self.players_df['now_cost'] / 10
-        
+        self.players_df['value'] = (self.players_df['now_cost'] / 10).fillna(0)
+
     def calculate_form_float(self):
-        """Convert form to numeric value"""
-        self.players_df['form_float'] = pd.to_numeric(self.players_df['form'], errors='coerce')
-        
+        self.players_df['form_float'] = pd.to_numeric(self.players_df['form'], errors='coerce').fillna(0)
+
     def calculate_historical_score(self):
-        """Calculate historical performance score"""
-        # Simulate historical data based on current performance
-        self.players_df['historical_score'] = self.players_df['total_points'] * 0.8
-        
+        self.players_df['historical_score'] = (self.players_df['total_points'] * 0.8).fillna(0)
+
     def calculate_consistency_score(self):
-        """Calculate consistency score"""
-        # Simple moving average of points
-        window_size = 5
-        self.players_df['consistency_score'] = self.players_df['total_points'].rolling(window_size).mean()
-        
+        self.players_df['consistency_score'] = self.players_df['total_points'].rolling(window=5, min_periods=1).mean().fillna(0)
+
     def calculate_starting_xi_probability(self):
-        """Calculate probability of being in starting XI"""
-        self.players_df['starting_xi_probability'] = 0.5
-        
-        # Minutes played factor
-        self.players_df['starting_xi_probability'] += self.players_df['minutes'].apply(lambda x: 
-            0.3 if x > 2000 else (
-            0.2 if x > 1500 else (
-            0.1 if x > 1000 else 0
-            )
-        ))
-        
-        # Form factor
+        prob = 0.5
+        self.players_df['starting_xi_probability'] = prob
+        self.players_df['starting_xi_probability'] += self.players_df['minutes'].apply(
+            lambda x: 0.3 if x > 2000 else (0.2 if x > 1500 else (0.1 if x > 1000 else 0))
+        )
         self.players_df['starting_xi_probability'] += self.players_df['form_float'] / 10
-        
-        # Points per game factor
         self.players_df['starting_xi_probability'] += self.players_df['total_points_per_game'] / 20
-        
-        # Ensure probability doesn't exceed 1.0
         self.players_df['starting_xi_probability'] = self.players_df['starting_xi_probability'].clip(0, 1)
-        
+
     def optimize_team_selection(self, budget: float) -> dict:
-        """Optimize team selection within the given budget"""
-        # Ensure all required columns are calculated
         self._initialize_required_columns()
-        
-        # Filter players within budget
-        filtered_players = self.players_df[self.players_df['now_cost'] <= budget]
-        
-        # Apply position limits
-        position_limits = self.position_limits.copy()
+        filtered_players = self.players_df[self.players_df['now_cost'] <= budget].copy()
         selected_players = []
         remaining_budget = budget
-        
-        # Iterate through positions
         for position in ['Goalkeeper', 'Defender', 'Midfielder', 'Forward']:
-            if position in position_limits:
-                max_players = position_limits[position]
-                
-                # Sort players by points per game
-                position_players = filtered_players[filtered_players['position'] == position]
-                position_players = position_players.sort_values(by='total_points_per_game', ascending=False)
-                
-                # Select top players within budget
-                selected = []
-                for _, player in position_players.iterrows():
-                    if len(selected) < max_players and player['now_cost'] <= remaining_budget:
-                        selected.append(player)
-                        remaining_budget -= player['now_cost']
-                
-                selected_players.extend(selected)
-        
-        # Check team limits
+            pos_limit = self.position_limits[position]
+            players = filtered_players[filtered_players['position'] == position]
+            players = players.sort_values(by='total_points_per_game', ascending=False)
+            selected = []
+            for _, player in players.iterrows():
+                if len(selected) < pos_limit and player['now_cost'] <= remaining_budget:
+                    selected.append(player)
+                    remaining_budget -= player['now_cost']
+            selected_players.extend(selected)
         team_counts = {}
+        final_team = []
         for player in selected_players:
             team = player['team']
-            if team in team_counts:
-                team_counts[team] += 1
-            else:
-                team_counts[team] = 1
-            
-            if team_counts[team] > self.team_limit:
-                # Remove players from teams that exceed the limit
-                selected_players = [p for p in selected_players if p['team'] != team or selected_players.index(p) < self.team_limit]
-        
+            if team_counts.get(team, 0) < self.team_limit:
+                final_team.append(player)
+                team_counts[team] = team_counts.get(team, 0) + 1
+        total_cost = sum(player['now_cost'] for player in final_team)
         return {
-            'team': selected_players,
-            'total_cost': sum(player['now_cost'] for player in selected_players)
+            'team': final_team,
+            'total_cost': total_cost
         }
+
+    def suggest_optimal_starting_eleven(self, team_players=None):
+        if team_players is None:
+            team_players = self.players_df
+        formations = [
+            {'Defender': 3, 'Midfielder': 4, 'Forward': 3},
+            {'Defender': 3, 'Midfielder': 5, 'Forward': 2},
+            {'Defender': 4, 'Midfielder': 4, 'Forward': 2}
+        ]
+        for formation in formations:
+            xi = []
+            gks = team_players[team_players['position'] == 'Goalkeeper']
+            if len(gks) < 1:
+                continue
+            gk = gks.sort_values('total_points_per_game', ascending=False).iloc[0]
+            xi.append(gk)
+            valid = True
+            for pos in ['Defender', 'Midfielder', 'Forward']:
+                players = team_players[team_players['position'] == pos]
+                if len(players) < formation[pos]:
+                    valid = False
+                    break
+                pos_players = players.sort_values('total_points_per_game', ascending=False).iloc[:formation[pos]]
+                xi.extend(list(pos_players))
+            if valid and len(xi) == 11:
+                return {
+                    'players': pd.DataFrame(xi),
+                    'formation': formation
+                }
+        return {'error': 'Insufficient players for any valid formation'}
 
 class FPLChatBot:
     """Enhanced chatbot using EuriAI for FPL strategy discussions"""
@@ -473,8 +442,9 @@ class FPLChatBot:
         
         payload = {
             "model": "gemini-2.5-pro",
-            "max_tokens": 1000,
-            "messages": messages
+            "max_tokens": 800,
+            "messages": messages,
+            "temperature": 0.5
         }
         
         response = requests.post(
