@@ -265,154 +265,28 @@ class EnhancedFPLPredictor:
         self.players_df = players_df
         self.position_limits = {'Goalkeeper': 2, 'Defender': 5, 'Midfielder': 5, 'Forward': 3}
         self.team_limit = 3
-
+        
+    def calculate_games_played(self):
+        """Calculate number of games played based on minutes"""
+        # Calculate games_played as minutes divided by 90
+        self.players_df['games_played'] = self.players_df['minutes'] / 90
+        # Replace division by zero or NaN values with 0
+        self.players_df['games_played'] = self.players_df['games_played'].fillna(0)
+        
     def calculate_total_points_per_game(self):
         """Calculate points per game for players"""
+        # First ensure games_played exists
+        if 'games_played' not in self.players_df.columns:
+            self.calculate_games_played()
+        
+        # Calculate points per game
         self.players_df['total_points_per_game'] = self.players_df['total_points'] / self.players_df['games_played']
-
-    def calculate_enhanced_predicted_points(self, gameweek: int = 1) -> pd.DataFrame:
-        """Enhanced prediction using historical data"""
-        df = self.players_df.copy()
+        # Handle division by zero or NaN values
+        self.players_df['total_points_per_game'] = self.players_df['total_points_per_game'].fillna(0)
         
-        # Enhanced weights including historical data
-        weights = {
-            'total_points': 0.25,
-            'form_float': 0.2,
-            'points_per_game': 0.15,
-            'historical_score': 0.15,
-            'consistency_score': 0.1,
-            'minutes': 0.05,
-            'influence': 0.03,
-            'creativity': 0.03,
-            'threat': 0.04
-        }
-        
-        # Normalize metrics
-        for metric in weights.keys():
-            if metric in df.columns:
-                max_val = df[metric].max()
-                if max_val > 0:
-                    df[f'{metric}_norm'] = df[metric] / max_val
-        
-        # Calculate enhanced predicted points
-        df['predicted_points'] = 0
-        for metric, weight in weights.items():
-            if f'{metric}_norm' in df.columns:
-                df['predicted_points'] += df[f'{metric}_norm'] * weight * 25
-        
-        # Position-specific adjustments
-        position_multipliers = {'Goalkeeper': 0.7, 'Defender': 0.85, 'Midfielder': 1.15, 'Forward': 1.25}
-        for pos, mult in position_multipliers.items():
-            df.loc[df['position'] == pos, 'predicted_points'] *= mult
-        
-        return df
-    
-    def suggest_optimal_starting_eleven(self, team_players: List[Dict]) -> Dict:
-        """Enhanced starting XI suggestion with multiple formation options"""
-        if len(team_players) != 15:
-            return {'error': 'Team must have exactly 15 players'}
-        
-        # Available formations with their tactical descriptions
-        formations = {
-            '3-4-3': {
-                'formation': {'Goalkeeper': 1, 'Defender': 3, 'Midfielder': 4, 'Forward': 3},
-                'description': 'Attacking formation, good for chasing points'
-            },
-            '3-5-2': {
-                'formation': {'Goalkeeper': 1, 'Defender': 3, 'Midfielder': 5, 'Forward': 2},
-                'description': 'Midfield heavy, great for premium midfielders'
-            },
-            '4-3-3': {
-                'formation': {'Goalkeeper': 1, 'Defender': 4, 'Midfielder': 3, 'Forward': 3},
-                'description': 'Balanced attacking approach'
-            },
-            '4-4-2': {
-                'formation': {'Goalkeeper': 1, 'Defender': 4, 'Midfielder': 4, 'Forward': 2},
-                'description': 'Classic balanced formation'
-            },
-            '5-3-2': {
-                'formation': {'Goalkeeper': 1, 'Defender': 5, 'Midfielder': 3, 'Forward': 2},
-                'description': 'Defensive formation with premium defenders'
-            },
-            '4-5-1': {
-                'formation': {'Goalkeeper': 1, 'Defender': 4, 'Midfielder': 5, 'Forward': 1},
-                'description': 'Ultra-midfield heavy for premium mid strategy'
-            }
-        }
-        
-        best_formation = None
-        max_points = 0
-        all_formation_options = {}
-        
-        # Group players by position
-        position_players = {'Goalkeeper': [], 'Defender': [], 'Midfielder': [], 'Forward': []}
-        for player in team_players:
-            position_players[player['position']].append(player)
-        
-        # Sort by predicted points and starting XI probability
-        for pos in position_players:
-            position_players[pos].sort(
-                key=lambda x: (x.get('predicted_points', 0) * x.get('starting_xi_probability', 0.5)), 
-                reverse=True
-            )
-        
-        # Evaluate each formation
-        for formation_name, formation_info in formations.items():
-            formation_req = formation_info['formation']
-            xi_candidate = []
-            total_points = 0
-            valid_formation = True
-            
-            # Check if we have enough players for this formation
-            for pos, required in formation_req.items():
-                if len(position_players[pos]) >= required:
-                    selected = position_players[pos][:required]
-                    xi_candidate.extend(selected)
-                    total_points += sum(p.get('predicted_points', 0) for p in selected)
-                else:
-                    valid_formation = False
-                    break
-            
-            if valid_formation:
-                # Calculate formation-specific bonuses
-                formation_bonus = 0
-                
-                # Bonus for using high-probability starters
-                avg_start_prob = np.mean([p.get('starting_xi_probability', 0.5) for p in xi_candidate])
-                formation_bonus += avg_start_prob * 5
-                
-                # Bonus for good captaincy options
-                captain_candidates = [p for p in xi_candidate 
-                                    if p.get('predicted_points', 0) > 8]
-                formation_bonus += len(captain_candidates) * 2
-                
-                final_points = total_points + formation_bonus
-                
-                all_formation_options[formation_name] = {
-                    'players': xi_candidate,
-                    'formation': formation_req,
-                    'description': formation_info['description'],
-                    'total_predicted_points': final_points,
-                    'bench': [p for p in team_players if p not in xi_candidate],
-                    'captain_suggestion': max(xi_candidate, key=lambda x: x.get('predicted_points', 0)),
-                    'vice_captain_suggestion': sorted(xi_candidate, key=lambda x: x.get('predicted_points', 0), reverse=True)[1]
-                }
-                
-                if final_points > max_points:
-                    max_points = final_points
-                    best_formation = formation_name
-        
-        if best_formation:
-            result = all_formation_options[best_formation]
-            result['formation_name'] = best_formation
-            result['alternative_formations'] = {k: v for k, v in all_formation_options.items() if k != best_formation}
-            return result
-        
-        return {'error': 'Could not form valid starting XI with available players'}
-    
     def optimize_team_selection(self, budget: float) -> dict:
         """Optimize team selection within the given budget"""
-        # Calculate points per game if not already calculated
+        # Calculate required metrics if not already calculated
         if 'total_points_per_game' not in self.players_df.columns:
             self.calculate_total_points_per_game()
             
