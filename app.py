@@ -260,124 +260,126 @@ class FPLDataManager:
 
 class EnhancedFPLPredictor:
     def __init__(self, players_df):
-        self.players_df = players_df
-        self.position_limits = {'Goalkeeper': 2, 'Defender': 5, 'Midfielder': 5, 'Forward': 3}
+        if isinstance(players_df, list):
+            players_df = pd.DataFrame(players_df)
+        self.players_df = players_df.copy()
+        self.position_limits = {"Goalkeeper": 2, "Defender": 5, "Midfielder": 5, "Forward": 3}
         self.team_limit = 3
         self._initialize_required_columns()
 
     def _initialize_required_columns(self):
-        if 'minutes' not in self.players_df.columns:
-            self.players_df['minutes'] = 0
-        if 'games_played' not in self.players_df.columns:
+        df = self.players_df
+        if "minutes" not in df.columns:
+            df["minutes"] = 0
+        if "games_played" not in df.columns:
             self.calculate_games_played()
-        if 'total_points_per_game' not in self.players_df.columns:
+        if "total_points_per_game" not in df.columns:
             self.calculate_total_points_per_game()
-        if 'value' not in self.players_df.columns:
+        if "value" not in df.columns:
             self.calculate_value()
-        if 'form_float' not in self.players_df.columns:
+        if "form_float" not in df.columns:
             self.calculate_form_float()
-        if 'historical_score' not in self.players_df.columns:
+        if "historical_score" not in df.columns:
             self.calculate_historical_score()
-        if 'consistency_score' not in self.players_df.columns:
+        if "consistency_score" not in df.columns:
             self.calculate_consistency_score()
-        if 'starting_xi_probability' not in self.players_df.columns:
+        if "starting_xi_probability" not in df.columns:
             self.calculate_starting_xi_probability()
+        self.players_df = df
 
     def calculate_games_played(self):
-        self.players_df['games_played'] = (self.players_df['minutes'] / 90).fillna(0).replace([float('inf'), -float('inf')], 0)
-
+        self.players_df["games_played"] = (self.players_df["minutes"] / 90).fillna(0).replace([float("inf"), -float("inf")], 0)
     def calculate_total_points_per_game(self):
-        if 'games_played' not in self.players_df.columns:
+        if "games_played" not in self.players_df.columns:
             self.calculate_games_played()
-        self.players_df['total_points_per_game'] = (self.players_df['total_points'] / self.players_df['games_played']).fillna(0).replace([float('inf'), -float('inf')], 0)
-
+        self.players_df["total_points_per_game"] = (
+            self.players_df["total_points"] / self.players_df["games_played"]
+        ).replace([float("inf"), -float("inf")], 0).fillna(0)
     def calculate_value(self):
-        self.players_df['value'] = (self.players_df['now_cost'] / 10).fillna(0)
-
+        self.players_df["value"] = (self.players_df["now_cost"] / 10).fillna(0)
     def calculate_form_float(self):
-        self.players_df['form_float'] = pd.to_numeric(self.players_df['form'], errors='coerce').fillna(0)
-
+        self.players_df["form_float"] = pd.to_numeric(self.players_df["form"], errors="coerce").fillna(0)
     def calculate_historical_score(self):
-        self.players_df['historical_score'] = (self.players_df['total_points'] * 0.8).fillna(0)
-
+        self.players_df["historical_score"] = (self.players_df["total_points"] * 0.8).fillna(0)
     def calculate_consistency_score(self):
-        self.players_df['consistency_score'] = self.players_df['total_points'].rolling(window=5, min_periods=1).mean().fillna(0)
-
+        self.players_df["consistency_score"] = self.players_df["total_points"].rolling(window=5, min_periods=1).mean().fillna(self.players_df["total_points"].mean()).fillna(0)
     def calculate_starting_xi_probability(self):
         prob = 0.5
-        self.players_df['starting_xi_probability'] = prob
-        self.players_df['starting_xi_probability'] += self.players_df['minutes'].apply(
+        self.players_df["starting_xi_probability"] = prob
+        self.players_df["starting_xi_probability"] += self.players_df["minutes"].apply(
             lambda x: 0.3 if x > 2000 else (0.2 if x > 1500 else (0.1 if x > 1000 else 0))
         )
-        self.players_df['starting_xi_probability'] += self.players_df['form_float'] / 10
-        self.players_df['starting_xi_probability'] += self.players_df['total_points_per_game'] / 20
-        self.players_df['starting_xi_probability'] = self.players_df['starting_xi_probability'].clip(0, 1)
+        self.players_df["starting_xi_probability"] += self.players_df["form_float"] / 10
+        self.players_df["starting_xi_probability"] += self.players_df["total_points_per_game"] / 20
+        self.players_df["starting_xi_probability"] = self.players_df["starting_xi_probability"].clip(0, 1)
 
     def optimize_team_selection(self, budget: float) -> dict:
         self._initialize_required_columns()
-        filtered_players = self.players_df[self.players_df['now_cost'] <= budget].copy()
+        filtered_players = self.players_df[self.players_df["now_cost"] <= budget].copy()
         selected_players = []
         remaining_budget = budget
-        for position in ['Goalkeeper', 'Defender', 'Midfielder', 'Forward']:
+        for position in ["Goalkeeper", "Defender", "Midfielder", "Forward"]:
             pos_limit = self.position_limits[position]
-            players = filtered_players[filtered_players['position'] == position]
-            players = players.sort_values(by='total_points_per_game', ascending=False)
-            selected = []
-            for _, player in players.iterrows():
-                if len(selected) < pos_limit and player['now_cost'] <= remaining_budget:
-                    selected.append(player)
-                    remaining_budget -= player['now_cost']
-            selected_players.extend(selected)
+            candidates = filtered_players[filtered_players["position"].astype(str).str.strip().str.title() == position]
+            candidates = candidates.sort_values(by="total_points_per_game", ascending=False)
+            pos_selected = []
+            for _, player in candidates.iterrows():
+                if len(pos_selected) < pos_limit and player["now_cost"] <= remaining_budget:
+                    pos_selected.append(player)
+                    remaining_budget -= player["now_cost"]
+            selected_players.extend(pos_selected)
         team_counts = {}
         final_team = []
         for player in selected_players:
-            team = player['team']
+            team = player["team"] if "team" in player else None
+            if team is None:
+                continue
             if team_counts.get(team, 0) < self.team_limit:
                 final_team.append(player)
                 team_counts[team] = team_counts.get(team, 0) + 1
-        total_cost = sum(player['now_cost'] for player in final_team)
+        total_cost = sum(player["now_cost"] if "now_cost" in player else 0 for player in final_team)
         return {
-            'team': final_team,
-            'total_cost': total_cost
+            "team": final_team,
+            "total_cost": total_cost,
         }
 
-def suggest_optimal_starting_eleven(self, team_players=None):
-    import pandas as pd
-    if team_players is None:
-        team_players = self.players_df
-    # Convert to DataFrame if not already
-    if isinstance(team_players, list):
-        team_players = pd.DataFrame(team_players)
-    # Defensive: check for key DataFrame columns
-    if 'position' not in team_players.columns or 'total_points_per_game' not in team_players.columns:
-        raise ValueError("team_players must be a DataFrame with 'position' and 'total_points_per_game' columns.")
-    team_players = team_players.copy()
-    formations = [
-        {'Defender': 3, 'Midfielder': 4, 'Forward': 3},
-        {'Defender': 3, 'Midfielder': 5, 'Forward': 2},
-        {'Defender': 4, 'Midfielder': 4, 'Forward': 2}
-    ]
-    for formation in formations:
-        xi = []
-        gks = team_players[team_players['position'].str.strip().str.title() == 'Goalkeeper']
-        if len(gks) < 1:
-            continue
-        gk = gks.sort_values('total_points_per_game', ascending=False).iloc[0]
-        xi.append(gk)
-        valid = True
-        for pos in ['Defender', 'Midfielder', 'Forward']:
-            players = team_players[team_players['position'].str.strip().str.title() == pos]
-            if len(players) < formation[pos]:
-                valid = False
-                break
-            pos_players = players.sort_values('total_points_per_game', ascending=False).iloc[:formation[pos]]
-            xi.extend(list(pos_players.itertuples(index=False)))
-        if valid and len(xi) == 11:
-            return {
-                'players': pd.DataFrame([player._asdict() if hasattr(player, "_asdict") else dict(player) for player in xi]),
-                'formation': formation
-            }
-    return {'error': 'Insufficient players for any valid formation'}
+    def suggest_optimal_starting_eleven(self, team_players=None):
+        if team_players is None:
+            team_players = self.players_df
+        if isinstance(team_players, list):
+            team_players = pd.DataFrame(team_players)
+        if not isinstance(team_players, pd.DataFrame):
+            raise ValueError("team_players must be a DataFrame or list of records.")
+        if "position" not in team_players.columns or "total_points_per_game" not in team_players.columns:
+            raise ValueError("team_players must have 'position' and 'total_points_per_game' columns.")
+        team_players = team_players.copy()
+        team_players["position"] = team_players["position"].astype(str).str.strip().str.title()
+        formations = [
+            {"Defender": 3, "Midfielder": 4, "Forward": 3},
+            {"Defender": 3, "Midfielder": 5, "Forward": 2},
+            {"Defender": 4, "Midfielder": 4, "Forward": 2},
+        ]
+        for formation in formations:
+            xi = []
+            gks = team_players[team_players["position"] == "Goalkeeper"]
+            if len(gks) < 1:
+                continue
+            gk = gks.sort_values("total_points_per_game", ascending=False).iloc[0]
+            xi.append(gk.to_dict())
+            valid = True
+            for pos in ["Defender", "Midfielder", "Forward"]:
+                players = team_players[team_players["position"] == pos]
+                if len(players) < formation[pos]:
+                    valid = False
+                    break
+                pos_players = players.sort_values("total_points_per_game", ascending=False).iloc[: formation[pos]]
+                xi.extend(pos_players.to_dict(orient="records"))
+            if valid and len(xi) == 11:
+                return {
+                    "players": pd.DataFrame(xi),
+                    "formation": formation,
+                }
+        return {"error": "Insufficient players for any valid formation"}
 
 class FPLChatBot:
     """Enhanced chatbot using EuriAI for FPL strategy discussions"""
