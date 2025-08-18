@@ -710,7 +710,7 @@ def main():
                                         with col_a:
                                             st.write(f"**{player['web_name']}** ({player['team']})")
                                         with col_b:
-                                            st.write(f"£{player['cost']:.1f}M")
+                                            st.write(f"£{player['now_cost']:.1f}M")
                                         with col_c:
                                             st.write(f"{player['predicted_points']:.1f} pts")
                                         with col_d:
