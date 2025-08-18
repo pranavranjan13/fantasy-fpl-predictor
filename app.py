@@ -269,102 +269,83 @@ class EnhancedFPLPredictor:
 
     def _initialize_required_columns(self):
         df = self.players_df
-
+        # Create all required columns if missing
+        # Guarantee 'minutes'
         if "minutes" not in df.columns:
             df["minutes"] = 0
+        # games_played
         if "games_played" not in df.columns:
-            self.calculate_games_played()
+            df["games_played"] = (df["minutes"] / 90).fillna(0).replace([float("inf"), -float("inf")], 0)
+        # total_points_per_game
         if "total_points_per_game" not in df.columns:
-            self.calculate_total_points_per_game()
+            df["total_points_per_game"] = (
+                df.get("total_points", 0) / df.get("games_played", 1)
+            ).replace([float("inf"), -float("inf")], 0).fillna(0)
+        # value
         if "value" not in df.columns:
-            self.calculate_value()
+            df["value"] = (df.get("now_cost", 0) / 10).fillna(0)
+        # form_float
         if "form_float" not in df.columns:
-            self.calculate_form_float()
+            df["form_float"] = pd.to_numeric(df.get("form", 0), errors="coerce").fillna(0)
+        # historical_score
         if "historical_score" not in df.columns:
-            self.calculate_historical_score()
+            df["historical_score"] = (df.get("total_points", 0) * 0.8).fillna(0)
+        # consistency_score
         if "consistency_score" not in df.columns:
-            self.calculate_consistency_score()
+            if "total_points" in df.columns:
+                df["consistency_score"] = (
+                    pd.Series(df["total_points"]).rolling(window=5, min_periods=1).mean().fillna(df["total_points"].mean())
+                ).fillna(0)
+            else:
+                df["consistency_score"] = 0
+        # starting_xi_probability
         if "starting_xi_probability" not in df.columns:
-            self.calculate_starting_xi_probability()
+            prob = 0.5 + df["minutes"].apply(
+                lambda x: 0.3 if x > 2000 else (0.2 if x > 1500 else (0.1 if x > 1000 else 0))
+            )
+            prob += df["form_float"] / 10
+            prob += df["total_points_per_game"] / 20
+            df["starting_xi_probability"] = prob.clip(0, 1)
+        # predicted_points
         if "predicted_points" not in df.columns:
-            self.calculate_predicted_points()
-        self.players_df = df
-
-    def calculate_games_played(self):
-        self.players_df["games_played"] = (
-            self.players_df["minutes"] / 90
-        ).fillna(0).replace([float("inf"), -float("inf")], 0)
-
-    def calculate_total_points_per_game(self):
-        if "games_played" not in self.players_df.columns:
-            self.calculate_games_played()
-        self.players_df["total_points_per_game"] = (
-            self.players_df["total_points"] / self.players_df["games_played"]
-        ).replace([float("inf"), -float("inf")], 0).fillna(0)
-
-    def calculate_value(self):
-        self.players_df["value"] = (self.players_df["now_cost"] / 10).fillna(0)
-
-    def calculate_form_float(self):
-        self.players_df["form_float"] = pd.to_numeric(self.players_df.get("form", 0), errors="coerce").fillna(0)
-
-    def calculate_historical_score(self):
-        self.players_df["historical_score"] = (self.players_df["total_points"] * 0.8).fillna(0)
-
-    def calculate_consistency_score(self):
-        self.players_df["consistency_score"] = (
-            self.players_df["total_points"]
-            .rolling(window=5, min_periods=1)
-            .mean()
-            .fillna(self.players_df["total_points"].mean())
-            .fillna(0)
-        )
-
-    def calculate_starting_xi_probability(self):
-        prob = 0.5
-        self.players_df["starting_xi_probability"] = prob
-        self.players_df["starting_xi_probability"] += self.players_df["minutes"].apply(
-            lambda x: 0.3 if x > 2000 else (0.2 if x > 1500 else (0.1 if x > 1000 else 0))
-        )
-        self.players_df["starting_xi_probability"] += self.players_df["form_float"] / 10
-        self.players_df["starting_xi_probability"] += self.players_df["total_points_per_game"] / 20
-        self.players_df["starting_xi_probability"] = self.players_df["starting_xi_probability"].clip(0, 1)
-
-    def calculate_predicted_points(self):
-        # Basic ensemble logic using weighted sum of features
-        w = {
-            "total_points": 0.2,
-            "form_float": 0.25,
-            "points_per_game": 0.15,
-            "historical_score": 0.15,
-            "consistency_score": 0.1,
-            "minutes": 0.05,
-            "starting_xi_probability": 0.1,
-        }
-        df = self.players_df
-        df["points_per_game"] = df.get("total_points", 0) / df.get("games_played", 1)
-        df = df.fillna(0)
-        df["predicted_points"] = (
-            w["total_points"] * df.get("total_points", 0)
-            + w["form_float"] * df.get("form_float", 0)
-            + w["points_per_game"] * df.get("points_per_game", 0)
-            + w["historical_score"] * df.get("historical_score", 0)
-            + w["consistency_score"] * df.get("consistency_score", 0)
-            + w["minutes"] * df.get("minutes", 0) / 100  # scaled
-            + w["starting_xi_probability"] * df.get("starting_xi_probability", 0) * 10  # scaled
-        )
+            # Basic predicted_points: tight to scoring and playtime
+            w = {
+                "total_points": 0.2,
+                "form_float": 0.25,
+                "points_per_game": 0.15,
+                "historical_score": 0.15,
+                "consistency_score": 0.1,
+                "minutes": 0.05,
+                "starting_xi_probability": 0.1
+            }
+            # Defensive: ensure subcolumns exist
+            df["points_per_game"] = (df.get("total_points", 0) / df.get("games_played", 1)).fillna(0)
+            df = df.fillna(0)
+            df["predicted_points"] = (
+                w["total_points"] * df.get("total_points", 0)
+                + w["form_float"] * df.get("form_float", 0)
+                + w["points_per_game"] * df.get("points_per_game", 0)
+                + w["historical_score"] * df.get("historical_score", 0)
+                + w["consistency_score"] * df.get("consistency_score", 0)
+                + w["minutes"] * df.get("minutes", 0) / 100
+                + w["starting_xi_probability"] * df.get("starting_xi_probability", 0) * 10
+            )
+        # Standardize position column format
+        df["position"] = df["position"].astype(str).str.strip().str.title()
+        # Preserve
         self.players_df = df
 
     def optimize_team_selection(self, budget: float) -> dict:
-        self._initialize_required_columns()
+        self._initialize_required_columns()  # Always ensure columns before any logic
         filtered_players = self.players_df[self.players_df["now_cost"] <= budget].copy()
         selected_players = []
         remaining_budget = budget
         for position in ["Goalkeeper", "Defender", "Midfielder", "Forward"]:
             pos_limit = self.position_limits[position]
-            candidates = filtered_players[
-                filtered_players["position"].astype(str).str.strip().str.title() == position
-            ]
+            candidates = filtered_players[filtered_players["position"] == position]
+            # Guarantee 'predicted_points' exists before sort
+            if "predicted_points" not in candidates.columns:
+                raise RuntimeError("Missing 'predicted_points' on candidate DataFrame.")
             candidates = candidates.sort_values(by="predicted_points", ascending=False)
             pos_selected = []
             for _, player in candidates.iterrows():
@@ -375,13 +356,16 @@ class EnhancedFPLPredictor:
         team_counts = {}
         final_team = []
         for player in selected_players:
-            team = player.get("team", None)
+            team = player.get("team", None) if isinstance(player, dict) else player.team
             if team is None:
                 continue
             if team_counts.get(team, 0) < self.team_limit:
                 final_team.append(player)
                 team_counts[team] = team_counts.get(team, 0) + 1
-        total_cost = sum(player["now_cost"] if "now_cost" in player else 0 for player in final_team)
+        total_cost = sum(
+            player["now_cost"] if isinstance(player, dict) else getattr(player, "now_cost", 0)
+            for player in final_team
+        )
         return {
             "team": final_team,
             "total_cost": total_cost,
@@ -394,8 +378,9 @@ class EnhancedFPLPredictor:
             team_players = pd.DataFrame(team_players)
         if not isinstance(team_players, pd.DataFrame):
             raise ValueError("team_players must be a DataFrame or list of records.")
-        if "position" not in team_players.columns or "predicted_points" not in team_players.columns:
-            raise ValueError("team_players must have 'position' and 'predicted_points' columns.")
+        # Defensive: Ensure predicted_points exists
+        if "predicted_points" not in team_players.columns:
+            raise RuntimeError("Input DataFrame is missing 'predicted_points'.")
         team_players = team_players.copy()
         team_players["position"] = team_players["position"].astype(str).str.strip().str.title()
         formations = [
