@@ -708,7 +708,7 @@ def main():
                                     for player in pos_players:
                                         col_a, col_b, col_c, col_d = st.columns([3, 1, 1, 1])
                                         with col_a:
-                                            st.write(f"**{player['name']}** ({player['team']})")
+                                            st.write(f"**{player['web_name']}** ({player['team']})")
                                         with col_b:
                                             st.write(f"£{player['cost']:.1f}M")
                                         with col_c:
