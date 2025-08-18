@@ -269,6 +269,7 @@ class EnhancedFPLPredictor:
 
     def _initialize_required_columns(self):
         df = self.players_df
+
         if "minutes" not in df.columns:
             df["minutes"] = 0
         if "games_played" not in df.columns:
@@ -285,24 +286,40 @@ class EnhancedFPLPredictor:
             self.calculate_consistency_score()
         if "starting_xi_probability" not in df.columns:
             self.calculate_starting_xi_probability()
+        if "predicted_points" not in df.columns:
+            self.calculate_predicted_points()
         self.players_df = df
 
     def calculate_games_played(self):
-        self.players_df["games_played"] = (self.players_df["minutes"] / 90).fillna(0).replace([float("inf"), -float("inf")], 0)
+        self.players_df["games_played"] = (
+            self.players_df["minutes"] / 90
+        ).fillna(0).replace([float("inf"), -float("inf")], 0)
+
     def calculate_total_points_per_game(self):
         if "games_played" not in self.players_df.columns:
             self.calculate_games_played()
         self.players_df["total_points_per_game"] = (
             self.players_df["total_points"] / self.players_df["games_played"]
         ).replace([float("inf"), -float("inf")], 0).fillna(0)
+
     def calculate_value(self):
         self.players_df["value"] = (self.players_df["now_cost"] / 10).fillna(0)
+
     def calculate_form_float(self):
-        self.players_df["form_float"] = pd.to_numeric(self.players_df["form"], errors="coerce").fillna(0)
+        self.players_df["form_float"] = pd.to_numeric(self.players_df.get("form", 0), errors="coerce").fillna(0)
+
     def calculate_historical_score(self):
         self.players_df["historical_score"] = (self.players_df["total_points"] * 0.8).fillna(0)
+
     def calculate_consistency_score(self):
-        self.players_df["consistency_score"] = self.players_df["total_points"].rolling(window=5, min_periods=1).mean().fillna(self.players_df["total_points"].mean()).fillna(0)
+        self.players_df["consistency_score"] = (
+            self.players_df["total_points"]
+            .rolling(window=5, min_periods=1)
+            .mean()
+            .fillna(self.players_df["total_points"].mean())
+            .fillna(0)
+        )
+
     def calculate_starting_xi_probability(self):
         prob = 0.5
         self.players_df["starting_xi_probability"] = prob
@@ -313,6 +330,31 @@ class EnhancedFPLPredictor:
         self.players_df["starting_xi_probability"] += self.players_df["total_points_per_game"] / 20
         self.players_df["starting_xi_probability"] = self.players_df["starting_xi_probability"].clip(0, 1)
 
+    def calculate_predicted_points(self):
+        # Basic ensemble logic using weighted sum of features
+        w = {
+            "total_points": 0.2,
+            "form_float": 0.25,
+            "points_per_game": 0.15,
+            "historical_score": 0.15,
+            "consistency_score": 0.1,
+            "minutes": 0.05,
+            "starting_xi_probability": 0.1,
+        }
+        df = self.players_df
+        df["points_per_game"] = df.get("total_points", 0) / df.get("games_played", 1)
+        df = df.fillna(0)
+        df["predicted_points"] = (
+            w["total_points"] * df.get("total_points", 0)
+            + w["form_float"] * df.get("form_float", 0)
+            + w["points_per_game"] * df.get("points_per_game", 0)
+            + w["historical_score"] * df.get("historical_score", 0)
+            + w["consistency_score"] * df.get("consistency_score", 0)
+            + w["minutes"] * df.get("minutes", 0) / 100  # scaled
+            + w["starting_xi_probability"] * df.get("starting_xi_probability", 0) * 10  # scaled
+        )
+        self.players_df = df
+
     def optimize_team_selection(self, budget: float) -> dict:
         self._initialize_required_columns()
         filtered_players = self.players_df[self.players_df["now_cost"] <= budget].copy()
@@ -320,8 +362,10 @@ class EnhancedFPLPredictor:
         remaining_budget = budget
         for position in ["Goalkeeper", "Defender", "Midfielder", "Forward"]:
             pos_limit = self.position_limits[position]
-            candidates = filtered_players[filtered_players["position"].astype(str).str.strip().str.title() == position]
-            candidates = candidates.sort_values(by="total_points_per_game", ascending=False)
+            candidates = filtered_players[
+                filtered_players["position"].astype(str).str.strip().str.title() == position
+            ]
+            candidates = candidates.sort_values(by="predicted_points", ascending=False)
             pos_selected = []
             for _, player in candidates.iterrows():
                 if len(pos_selected) < pos_limit and player["now_cost"] <= remaining_budget:
@@ -331,7 +375,7 @@ class EnhancedFPLPredictor:
         team_counts = {}
         final_team = []
         for player in selected_players:
-            team = player["team"] if "team" in player else None
+            team = player.get("team", None)
             if team is None:
                 continue
             if team_counts.get(team, 0) < self.team_limit:
@@ -350,8 +394,8 @@ class EnhancedFPLPredictor:
             team_players = pd.DataFrame(team_players)
         if not isinstance(team_players, pd.DataFrame):
             raise ValueError("team_players must be a DataFrame or list of records.")
-        if "position" not in team_players.columns or "total_points_per_game" not in team_players.columns:
-            raise ValueError("team_players must have 'position' and 'total_points_per_game' columns.")
+        if "position" not in team_players.columns or "predicted_points" not in team_players.columns:
+            raise ValueError("team_players must have 'position' and 'predicted_points' columns.")
         team_players = team_players.copy()
         team_players["position"] = team_players["position"].astype(str).str.strip().str.title()
         formations = [
@@ -364,7 +408,7 @@ class EnhancedFPLPredictor:
             gks = team_players[team_players["position"] == "Goalkeeper"]
             if len(gks) < 1:
                 continue
-            gk = gks.sort_values("total_points_per_game", ascending=False).iloc[0]
+            gk = gks.sort_values("predicted_points", ascending=False).iloc[0]
             xi.append(gk.to_dict())
             valid = True
             for pos in ["Defender", "Midfielder", "Forward"]:
@@ -372,7 +416,7 @@ class EnhancedFPLPredictor:
                 if len(players) < formation[pos]:
                     valid = False
                     break
-                pos_players = players.sort_values("total_points_per_game", ascending=False).iloc[: formation[pos]]
+                pos_players = players.sort_values("predicted_points", ascending=False).iloc[: formation[pos]]
                 xi.extend(pos_players.to_dict(orient="records"))
             if valid and len(xi) == 11:
                 return {
