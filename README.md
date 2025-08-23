@@ -282,16 +282,7 @@ MIT License - Feel free to modify and distribute.
 
 ---
 
-## 🎯 Success Stories
-
-*"Achieved 50k overall rank using the genetic algorithm suggestions!"* - Beta User
-
-*"The transfer timing recommendations helped me save crucial points."* - FPL Manager
-
-*"Finally, an AI tool that understands FPL strategy, not just statistics."* - Fantasy Analyst
-
----
-
 **Happy FPL Managing! 🏆⚽**
+
 
 *Built with ❤️ for the FPL community*
