@@ -101,6 +101,24 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+def safe_float(value, default=0.0):
+    """Safely convert a value to float"""
+    try:
+        if pd.isna(value) or value == '' or value is None:
+            return default
+        return float(value)
+    except (ValueError, TypeError):
+        return default
+
+def safe_int(value, default=0):
+    """Safely convert a value to int"""
+    try:
+        if pd.isna(value) or value == '' or value is None:
+            return default
+        return int(float(value))
+    except (ValueError, TypeError):
+        return default
+
 class FPLDataManager:
     """Enhanced FPL data manager with historical performance tracking"""
     
@@ -151,10 +169,12 @@ class FPLDataManager:
             team_map = {team['id']: team['name'] for team in self.current_season_data['teams']}
             players_df['team_name'] = players_df['team'].map(team_map)
             
-            # Calculate enhanced metrics
-            players_df['value'] = players_df['now_cost'] / 10
-            players_df['points_per_million'] = players_df['total_points'] / players_df['value']
-            players_df['form_float'] = pd.to_numeric(players_df['form'], errors='coerce')
+            # Calculate enhanced metrics with safe conversions
+            players_df['value'] = players_df['now_cost'].apply(lambda x: safe_float(x) / 10)
+            players_df['points_per_million'] = players_df.apply(
+                lambda row: safe_float(row['total_points']) / max(row['value'], 0.1), axis=1
+            )
+            players_df['form_float'] = players_df['form'].apply(safe_float)
             
             # Add historical performance score
             players_df['historical_score'] = self._calculate_historical_score(players_df)
@@ -174,7 +194,7 @@ class FPLDataManager:
             
             for col in numeric_cols:
                 if col in players_df.columns:
-                    players_df[col] = pd.to_numeric(players_df[col], errors='coerce').fillna(0)
+                    players_df[col] = players_df[col].apply(safe_float)
                     
             return players_df
         
@@ -182,20 +202,18 @@ class FPLDataManager:
     
     def _calculate_historical_score(self, df):
         """Calculate historical performance score"""
-        # Simulate historical data based on current performance
-        # In a real implementation, this would use actual historical API data
         historical_scores = []
         
         for _, player in df.iterrows():
             # Base score on current season performance
-            base_score = player.get('total_points', 0)
+            base_score = safe_float(player.get('total_points', 0))
             
             # Add consistency factor based on minutes played
-            minutes = player.get('minutes', 0)
+            minutes = safe_float(player.get('minutes', 0))
             consistency_bonus = min(minutes / 2000, 1.5)  # Up to 1.5x bonus for consistent players
             
             # Position-specific adjustments
-            position = player.get('element_type', 1)
+            position = safe_int(player.get('element_type', 1))
             position_multiplier = {1: 0.8, 2: 0.9, 3: 1.1, 4: 1.2}.get(position, 1.0)
             
             final_score = base_score * consistency_bonus * position_multiplier
@@ -208,20 +226,15 @@ class FPLDataManager:
         consistency_scores = []
         
         for _, player in df.iterrows():
-            points = player.get('total_points', 0)
-            minutes = player.get('minutes', 0)
-            form = player.get('form', '0')
-            
-            try:
-                form_float = float(form)
-            except:
-                form_float = 0
+            points = safe_float(player.get('total_points', 0))
+            minutes = safe_float(player.get('minutes', 0))
+            form = safe_float(player.get('form', 0))
             
             # Players with good minutes and stable form get higher scores
             if minutes > 1500:  # Regular starter
-                consistency = min(form_float * (minutes / 2000), 10)
+                consistency = min(form * (minutes / 2000), 10)
             else:
-                consistency = form_float * 0.5  # Penalize rotation risk
+                consistency = form * 0.5  # Penalize rotation risk
                 
             consistency_scores.append(consistency)
         
@@ -235,7 +248,7 @@ class FPLDataManager:
             base_prob = 0.5
             
             # Minutes played factor
-            minutes = player.get('minutes', 0)
+            minutes = safe_float(player.get('minutes', 0))
             if minutes > 2000:
                 minutes_factor = 0.9
             elif minutes > 1500:
@@ -246,12 +259,12 @@ class FPLDataManager:
                 minutes_factor = 0.2
             
             # Form factor
-            form = pd.to_numeric(player.get('form', 0), errors='coerce')
+            form = safe_float(player.get('form', 0))
             form_factor = min(form / 10, 0.3)  # Up to 0.3 bonus for good form
             
             # Points per game factor
-            ppg = player.get('points_per_game', 0)
-            ppg_factor = min(float(ppg) / 20, 0.2)  # Up to 0.2 bonus for high PPG
+            ppg = safe_float(player.get('points_per_game', 0))
+            ppg_factor = min(ppg / 20, 0.2)  # Up to 0.2 bonus for high PPG
             
             final_prob = min(base_prob + minutes_factor + form_factor + ppg_factor, 1.0)
             probabilities.append(final_prob)
@@ -279,14 +292,14 @@ class EnhancedFPLPredictor:
         # total_points_per_game
         if "total_points_per_game" not in df.columns:
             df["total_points_per_game"] = (
-                df.get("total_points", 0) / df.get("games_played", 1)
+                df.get("total_points", 0) / df.get("games_played", 1).replace(0, 1)
             ).replace([float("inf"), -float("inf")], 0).fillna(0)
         # value
         if "value" not in df.columns:
             df["value"] = (df.get("now_cost", 0) / 10).fillna(0)
         # form_float
         if "form_float" not in df.columns:
-            df["form_float"] = pd.to_numeric(df.get("form", 0), errors="coerce").fillna(0)
+            df["form_float"] = df.get("form", 0).apply(safe_float)
         # historical_score
         if "historical_score" not in df.columns:
             df["historical_score"] = (df.get("total_points", 0) * 0.8).fillna(0)
@@ -319,7 +332,7 @@ class EnhancedFPLPredictor:
                 "starting_xi_probability": 0.1
             }
             # Defensive: ensure subcolumns exist
-            df["points_per_game"] = (df.get("total_points", 0) / df.get("games_played", 1)).fillna(0)
+            df["points_per_game"] = (df.get("total_points", 0) / df.get("games_played", 1).replace(0, 1)).fillna(0)
             df = df.fillna(0)
             df["predicted_points"] = (
                 w["total_points"] * df.get("total_points", 0)
@@ -350,7 +363,7 @@ class EnhancedFPLPredictor:
             pos_selected = []
             for _, player in candidates.iterrows():
                 if len(pos_selected) < pos_limit and player["now_cost"] <= remaining_budget:
-                    pos_selected.append(player)
+                    pos_selected.append(player.to_dict())
                     remaining_budget -= player["now_cost"]
             selected_players.extend(pos_selected)
         team_counts = {}
@@ -380,14 +393,24 @@ class EnhancedFPLPredictor:
             raise ValueError("team_players must be a DataFrame or list of records.")
         # Defensive: Ensure predicted_points exists
         if "predicted_points" not in team_players.columns:
-            raise RuntimeError("Input DataFrame is missing 'predicted_points'.")
+            # Add predicted_points if missing
+            team_players = team_players.copy()
+            team_players["predicted_points"] = team_players.get("total_points", 0) * 0.5
+        
         team_players = team_players.copy()
         team_players["position"] = team_players["position"].astype(str).str.strip().str.title()
+        
         formations = [
-            {"Defender": 3, "Midfielder": 4, "Forward": 3},
-            {"Defender": 3, "Midfielder": 5, "Forward": 2},
-            {"Defender": 4, "Midfielder": 4, "Forward": 2},
+            {"name": "3-5-2", "Defender": 3, "Midfielder": 5, "Forward": 2},
+            {"name": "3-4-3", "Defender": 3, "Midfielder": 4, "Forward": 3},
+            {"name": "4-4-2", "Defender": 4, "Midfielder": 4, "Forward": 2},
+            {"name": "4-3-3", "Defender": 4, "Midfielder": 3, "Forward": 3},
+            {"name": "5-3-2", "Defender": 5, "Midfielder": 3, "Forward": 2},
         ]
+        
+        best_formation = None
+        best_score = -1
+        
         for formation in formations:
             xi = []
             gks = team_players[team_players["position"] == "Goalkeeper"]
@@ -395,7 +418,10 @@ class EnhancedFPLPredictor:
                 continue
             gk = gks.sort_values("predicted_points", ascending=False).iloc[0]
             xi.append(gk.to_dict())
+            
             valid = True
+            formation_score = gk['predicted_points']
+            
             for pos in ["Defender", "Midfielder", "Forward"]:
                 players = team_players[team_players["position"] == pos]
                 if len(players) < formation[pos]:
@@ -403,11 +429,44 @@ class EnhancedFPLPredictor:
                     break
                 pos_players = players.sort_values("predicted_points", ascending=False).iloc[: formation[pos]]
                 xi.extend(pos_players.to_dict(orient="records"))
-            if valid and len(xi) == 11:
-                return {
-                    "players": pd.DataFrame(xi),
-                    "formation": formation,
+                formation_score += pos_players['predicted_points'].sum()
+            
+            if valid and len(xi) == 11 and formation_score > best_score:
+                best_formation = {
+                    "players": xi,
+                    "formation": {k: v for k, v in formation.items() if k != "name"},
+                    "formation_name": formation["name"],
+                    "total_predicted_points": formation_score
                 }
+                best_score = formation_score
+        
+        if best_formation:
+            # Add captain suggestions
+            players_df = pd.DataFrame(best_formation["players"])
+            captain_candidate = players_df.loc[players_df["predicted_points"].idxmax()]
+            vice_candidate = players_df.loc[players_df["predicted_points"].nlargest(2).index[1]]
+            
+            best_formation["captain_suggestion"] = {
+                "name": captain_candidate["web_name"],
+                "predicted_points": captain_candidate["predicted_points"]
+            }
+            best_formation["vice_captain_suggestion"] = {
+                "name": vice_candidate["web_name"], 
+                "predicted_points": vice_candidate["predicted_points"]
+            }
+            
+            # Add bench (remaining players)
+            xi_indices = set(player.get('index', player.get('id', i)) for i, player in enumerate(best_formation["players"]))
+            bench_players = []
+            for _, player in team_players.iterrows():
+                player_id = getattr(player, 'name', str(player.get('index', player.get('id', ''))))
+                if player_id not in xi_indices and len(bench_players) < 4:
+                    bench_players.append(player.to_dict())
+            
+            best_formation["bench"] = bench_players
+            
+            return best_formation
+        
         return {"error": "Insufficient players for any valid formation"}
 
 class FPLChatBot:
@@ -654,7 +713,7 @@ def main():
                     # Generate optimal 15-man squad
                     result = predictor.optimize_team_selection(budget)
                     
-                    if 'team' in result:
+                    if 'team' in result and len(result['team']) > 0:
                         st.success(f"✅ Optimal team generated! Cost: £{result['total_cost']:.1f}M")
                         
                         # Get starting XI suggestion
@@ -688,41 +747,36 @@ def main():
                                 if pos in xi_by_position:
                                     st.markdown(f"**{pos}s:**")
                                     for player in xi_by_position[pos]:
-                                        is_captain = player['name'] == captain['name']
-                                        is_vice = player['name'] == vice_captain['name']
+                                        is_captain = player['web_name'] == captain['name']
+                                        is_vice = player['web_name'] == vice_captain['name']
                                         captain_badge = " (C)" if is_captain else " (VC)" if is_vice else ""
                                         
                                         st.markdown(
                                             f'<div class="starting-xi-card">'
-                                            f'<strong>{player["name"]}{captain_badge}</strong> ({player["team"]})<br>'
-                                            f'£{player["cost"]:.1f}M • {player["predicted_points"]:.1f} pts • '
-                                            f'Start Prob: {player.get("starting_xi_probability", 0.5):.0%}'
+                                            f'<strong>{player["web_name"]}{captain_badge}</strong> ({player.get("team_name", "Unknown")})<br>'
+                                            f'£{safe_float(player["now_cost"]) / 10:.1f}M • {safe_float(player["predicted_points"]):.1f} pts • '
+                                            f'Start Prob: {safe_float(player.get("starting_xi_probability", 0.5)):.0%}'
                                             f'</div>', 
                                             unsafe_allow_html=True
                                         )
                             
                             # Display Bench
                             st.subheader("🪑 Bench")
-                            bench_order = sorted(xi_result['bench'], 
-                                               key=lambda x: x.get('starting_xi_probability', 0) * x.get('predicted_points', 0), 
-                                               reverse=True)
-                            
-                            for i, player in enumerate(bench_order, 1):
-                                st.markdown(
-                                    f'<div class="bench-card">'
-                                    f'<strong>{i}. {player["name"]}</strong> ({player["position"]}, {player["team"]})<br>'
-                                    f'£{player["cost"]:.1f}M • {player["predicted_points"]:.1f} pts'
-                                    f'</div>', 
-                                    unsafe_allow_html=True
-                                )
-                            
-                            # Show alternative formations
-                            if xi_result.get('alternative_formations'):
-                                with st.expander("🔄 Alternative Formations"):
-                                    for alt_name, alt_data in list(xi_result['alternative_formations'].items())[:2]:
-                                        st.write(f"**{alt_name}**: {alt_data['description']}")
-                                        st.write(f"Predicted Points: {alt_data['total_predicted_points']:.1f}")
-                                        st.write("---")
+                            if 'bench' in xi_result and xi_result['bench']:
+                                bench_order = sorted(xi_result['bench'], 
+                                                   key=lambda x: safe_float(x.get('starting_xi_probability', 0)) * safe_float(x.get('predicted_points', 0)), 
+                                                   reverse=True)
+                                
+                                for i, player in enumerate(bench_order[:4], 1):  # Max 4 bench players
+                                    st.markdown(
+                                        f'<div class="bench-card">'
+                                        f'<strong>{i}. {player.get("web_name", "Unknown")}</strong> ({player.get("position", "Unknown")}, {player.get("team_name", "Unknown")})<br>'
+                                        f'£{safe_float(player.get("now_cost", 0)) / 10:.1f}M • {safe_float(player.get("predicted_points", 0)):.1f} pts'
+                                        f'</div>', 
+                                        unsafe_allow_html=True
+                                    )
+                            else:
+                                st.info("No bench players available")
                         
                         else:
                             st.error("Could not generate starting XI from the optimal team")
@@ -731,19 +785,22 @@ def main():
                         with st.expander("📋 Full 15-Man Squad Breakdown"):
                             positions = ['Goalkeeper', 'Defender', 'Midfielder', 'Forward']
                             for pos in positions:
-                                pos_players = [p for p in result['team'] if p['position'] == pos]
+                                pos_players = [p for p in result['team'] if p.get('position') == pos]
                                 if pos_players:
                                     st.subheader(f"{pos}s ({len(pos_players)})")
                                     for player in pos_players:
                                         col_a, col_b, col_c, col_d = st.columns([3, 1, 1, 1])
                                         with col_a:
-                                            st.write(f"**{player['web_name']}** ({player['team']})")
+                                            st.write(f"**{player.get('web_name', 'Unknown')}** ({player.get('team_name', 'Unknown')})")
                                         with col_b:
-                                            st.write(f"£{player['now_cost']:.1f}M")
+                                            st.write(f"£{safe_float(player.get('now_cost', 0)) / 10:.1f}M")
                                         with col_c:
-                                            st.write(f"{player['predicted_points']:.1f} pts")
+                                            st.write(f"{safe_float(player.get('predicted_points', 0)):.1f} pts")
                                         with col_d:
-                                            st.write(f"Form: {player.get('form', 0):.1f}")
+                                            form_value = safe_float(player.get('form', 0))
+                                            st.write(f"Form: {form_value:.1f}")
+                    else:
+                        st.error("Could not generate optimal team. Try adjusting the budget.")
         
         with col2:
             st.markdown("### 📊 Team Optimization")
@@ -793,21 +850,20 @@ def main():
                 
                 for player_name in current_team:
                     player_data = players_df[players_df['web_name'] == player_name].iloc[0]
-                    enhanced_predicted_points = predictor.calculate_enhanced_predicted_points().loc[player_data.name, 'predicted_points']
                     
                     player_info = {
-                        'name': player_data['web_name'],
+                        'web_name': player_data['web_name'],
                         'position': player_data['position'],
-                        'team': player_data['team_name'],
-                        'cost': player_data['value'],
-                        'predicted_points': enhanced_predicted_points,
-                        'form': player_data['form_float'],
-                        'starting_xi_probability': player_data['starting_xi_probability'],
-                        'consistency_score': player_data['consistency_score'],
-                        'historical_score': player_data['historical_score']
+                        'team_name': player_data['team_name'],
+                        'now_cost': player_data['now_cost'],
+                        'predicted_points': safe_float(player_data.get('predicted_points', 0)),
+                        'form': safe_float(player_data.get('form', 0)),
+                        'starting_xi_probability': safe_float(player_data.get('starting_xi_probability', 0.5)),
+                        'consistency_score': safe_float(player_data.get('consistency_score', 0)),
+                        'historical_score': safe_float(player_data.get('historical_score', 0))
                     }
                     team_details.append(player_info)
-                    total_squad_value += player_data['value']
+                    total_squad_value += safe_float(player_data['now_cost']) / 10
                 
                 # Get optimal starting XI
                 xi_result = predictor.suggest_optimal_starting_eleven(team_details)
@@ -818,62 +874,64 @@ def main():
                     with col1:
                         st.success("🎯 Optimized Starting XI Generated!")
                         
-                        formation = xi_result['formation']
-                        formation_name = xi_result['formation_name']
+                        formation_name = xi_result.get('formation_name', 'Unknown Formation')
                         st.markdown(f'<div class="formation-display">{formation_name}</div>', unsafe_allow_html=True)
                         
                         # Captain recommendations
-                        captain = xi_result['captain_suggestion']
-                        vice_captain = xi_result['vice_captain_suggestion']
+                        captain = xi_result.get('captain_suggestion', {'name': 'Unknown', 'predicted_points': 0})
+                        vice_captain = xi_result.get('vice_captain_suggestion', {'name': 'Unknown', 'predicted_points': 0})
                         
-                        st.info(f"👑 **Recommended Captain**: {captain['name']} ({captain['predicted_points']:.1f} pts)")
-                        st.info(f"🎖️ **Vice-Captain**: {vice_captain['name']} ({vice_captain['predicted_points']:.1f} pts)")
+                        st.info(f"👑 **Recommended Captain**: {captain['name']} ({safe_float(captain['predicted_points']):.1f} pts)")
+                        st.info(f"🎖️ **Vice-Captain**: {vice_captain['name']} ({safe_float(vice_captain['predicted_points']):.1f} pts)")
                         
                         # Starting XI with enhanced metrics
                         st.subheader("🔥 Your Starting XI")
                         xi_df = pd.DataFrame(xi_result['players'])
-                        xi_df = xi_df.sort_values(['position', 'predicted_points'], ascending=[True, False])
                         
+                        # Group by position for display
                         for pos in ['Goalkeeper', 'Defender', 'Midfielder', 'Forward']:
-                            pos_players = xi_df[xi_df['position'] == pos]
-                            if not pos_players.empty:
+                            pos_players = [p for p in xi_result['players'] if p.get('position') == pos]
+                            if pos_players:
                                 st.write(f"**{pos}s:**")
-                                for _, player in pos_players.iterrows():
-                                    is_captain = player['name'] == captain['name']
-                                    is_vice = player['name'] == vice_captain['name']
+                                for player in pos_players:
+                                    is_captain = player.get('web_name') == captain['name']
+                                    is_vice = player.get('web_name') == vice_captain['name']
                                     captain_badge = " (C)" if is_captain else " (VC)" if is_vice else ""
                                     
                                     st.markdown(
                                         f'<div class="starting-xi-card">'
-                                        f'<strong>{player["name"]}{captain_badge}</strong> ({player["team"]})<br>'
-                                        f'Predicted: {player["predicted_points"]:.1f} pts • '
-                                        f'Start Prob: {player["starting_xi_probability"]:.0%} • '
-                                        f'Form: {player["form"]:.1f}'
+                                        f'<strong>{player.get("web_name", "Unknown")}{captain_badge}</strong> ({player.get("team_name", "Unknown")})<br>'
+                                        f'Predicted: {safe_float(player.get("predicted_points", 0)):.1f} pts • '
+                                        f'Start Prob: {safe_float(player.get("starting_xi_probability", 0.5)):.0%} • '
+                                        f'Form: {safe_float(player.get("form", 0)):.1f}'
                                         f'</div>',
                                         unsafe_allow_html=True
                                     )
                         
                         # Bench analysis
-                        st.subheader("🪑 Bench Analysis")
-                        bench_df = pd.DataFrame(xi_result['bench'])
-                        bench_df = bench_df.sort_values('starting_xi_probability', ascending=False)
-                        
-                        for i, (_, player) in enumerate(bench_df.iterrows(), 1):
-                            st.markdown(
-                                f'<div class="bench-card">'
-                                f'<strong>{i}. {player["name"]}</strong> ({player["position"]}, {player["team"]})<br>'
-                                f'Predicted: {player["predicted_points"]:.1f} pts • '
-                                f'Start Prob: {player["starting_xi_probability"]:.0%}'
-                                f'</div>',
-                                unsafe_allow_html=True
-                            )
+                        if 'bench' in xi_result and xi_result['bench']:
+                            st.subheader("🪑 Bench Analysis")
+                            bench_df = pd.DataFrame(xi_result['bench'])
+                            bench_sorted = sorted(xi_result['bench'], 
+                                                key=lambda x: safe_float(x.get('starting_xi_probability', 0)), 
+                                                reverse=True)
+                            
+                            for i, player in enumerate(bench_sorted[:4], 1):
+                                st.markdown(
+                                    f'<div class="bench-card">'
+                                    f'<strong>{i}. {player.get("web_name", "Unknown")}</strong> ({player.get("position", "Unknown")}, {player.get("team_name", "Unknown")})<br>'
+                                    f'Predicted: {safe_float(player.get("predicted_points", 0)):.1f} pts • '
+                                    f'Start Prob: {safe_float(player.get("starting_xi_probability", 0.5)):.0%}'
+                                    f'</div>',
+                                    unsafe_allow_html=True
+                                )
                     
                     with col2:
                         st.subheader("📊 Squad Statistics")
                         
                         # Key metrics
-                        total_predicted = sum(p['predicted_points'] for p in xi_result['players'])
-                        avg_start_prob = np.mean([p['starting_xi_probability'] for p in team_details])
+                        total_predicted = sum(safe_float(p.get('predicted_points', 0)) for p in xi_result['players'])
+                        avg_start_prob = np.mean([safe_float(p.get('starting_xi_probability', 0.5)) for p in team_details])
                         
                         st.metric("Total Squad Value", f"£{total_squad_value:.1f}M")
                         st.metric("Starting XI Predicted Points", f"{total_predicted:.1f}")
@@ -881,20 +939,10 @@ def main():
                         
                         # Position distribution
                         st.subheader("Position Distribution")
-                        pos_counts = pd.Series([p['position'] for p in team_details]).value_counts()
+                        pos_counts = pd.Series([p.get('position', 'Unknown') for p in team_details]).value_counts()
                         st.bar_chart(pos_counts)
-                        
-                        # Alternative formations
-                        if xi_result.get('alternative_formations'):
-                            st.subheader("🔄 Alternative Formations")
-                            alt_formations = list(xi_result['alternative_formations'].items())[:3]
-                            
-                            for alt_name, alt_data in alt_formations:
-                                with st.container():
-                                    st.write(f"**{alt_name}**")
-                                    st.write(f"Points: {alt_data['total_predicted_points']:.1f}")
-                                    st.write(f"Strategy: {alt_data['description']}")
-                                    st.write("---")
+                else:
+                    st.error("Could not analyze your squad. Please check your player selections.")
         
         else:
             st.warning(f"Please select all 15 players. Currently selected: {len(current_team)}")
@@ -1091,10 +1139,13 @@ def main():
                 'Minutes', 'Starting XI Prob', 'Consistency', 'Historical Score'
             ]
             
-            comparison_df = pd.DataFrame({
-                player1: [p1_data[m] for m in metrics],
-                player2: [p2_data[m] for m in metrics]
-            }, index=metric_labels)
+            comparison_data = []
+            for i, metric in enumerate(metrics):
+                p1_val = safe_float(p1_data.get(metric, 0))
+                p2_val = safe_float(p2_data.get(metric, 0))
+                comparison_data.append([p1_val, p2_val])
+            
+            comparison_df = pd.DataFrame(comparison_data, columns=[player1, player2], index=metric_labels)
             
             st.subheader("📈 Enhanced Statistical Comparison")
             st.dataframe(comparison_df.style.highlight_max(axis=1))
@@ -1104,10 +1155,10 @@ def main():
             comparison_context = {
                 'player1': player1,
                 'player2': player2,
-                'p1_points': p1_data['total_points'],
-                'p2_points': p2_data['total_points'],
-                'p1_price': p1_data['value'],
-                'p2_price': p2_data['value']
+                'p1_points': safe_float(p1_data.get('total_points', 0)),
+                'p2_points': safe_float(p2_data.get('total_points', 0)),
+                'p1_price': safe_float(p1_data.get('value', 0)),
+                'p2_price': safe_float(p2_data.get('value', 0))
             }
             
             ai_comparison = chatbot.get_contextual_response(comparison_query, comparison_context)
@@ -1126,8 +1177,8 @@ def main():
                 max_val = players_df[metric].max()
                 min_val = players_df[metric].min()
                 if max_val != min_val:
-                    p1_norm = (p1_data[metric] - min_val) / (max_val - min_val)
-                    p2_norm = (p2_data[metric] - min_val) / (max_val - min_val)
+                    p1_norm = (safe_float(p1_data.get(metric, 0)) - min_val) / (max_val - min_val)
+                    p2_norm = (safe_float(p2_data.get(metric, 0)) - min_val) / (max_val - min_val)
                 else:
                     p1_norm = p2_norm = 0.5
                 normalized_p1.append(p1_norm)

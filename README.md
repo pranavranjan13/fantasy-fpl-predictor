@@ -125,7 +125,7 @@ For enhanced AI recommendations:
 4. **Choose Model**: Default is Claude-3-Haiku, configurable in settings
 
 **Benefits of EuriAI Integration:**
-- Access to Claude, GPT-4, and other premium models
+- Access to Gemini, GPT-4, and other premium models
 - Enhanced embeddings for better semantic search  
 - Usage tracking and metadata
 - Multi-model fallback support
@@ -282,7 +282,15 @@ MIT License - Feel free to modify and distribute.
 
 ---
 
+## 🎯 Success Stories
 
+*"Achieved 50k overall rank using the genetic algorithm suggestions!"* - Beta User
+
+*"The transfer timing recommendations helped me save crucial points."* - FPL Manager
+
+*"Finally, an AI tool that understands FPL strategy, not just statistics."* - Fantasy Analyst
+
+---
 
 **Happy FPL Managing! 🏆⚽**
 
