@@ -555,43 +555,55 @@ class EnhancedFPLChatBot:
             self.chat_history = self.chat_history[-20:]
 
 def create_field_visualization(xi_players, formation, captain, vice_captain, bench_players):
-    """Create football field visualization"""
+    """Create football field visualization using Streamlit components"""
     
-    field_html = """
-    <div class="field-container">
-        <div class="field-lines"></div>
-    """
+    # Create the field background
+    st.markdown("""
+    <div style="
+        background: linear-gradient(135deg, #2e7d32 0%, #4caf50 100%);
+        border-radius: 15px;
+        padding: 20px;
+        margin: 20px 0;
+        position: relative;
+        min-height: 500px;
+        background-image: 
+            linear-gradient(90deg, rgba(255,255,255,0.3) 1px, transparent 1px),
+            linear-gradient(rgba(255,255,255,0.3) 1px, transparent 1px);
+        background-size: 50px 50px;
+    ">
+    <h3 style="color: white; text-align: center; margin-bottom: 20px;">Starting XI Formation</h3>
+    """, unsafe_allow_html=True)
     
     # Position coordinates for different formations
     positions = {
         "3-5-2": {
-            "Goalkeeper": [(50, 90)],
-            "Defender": [(20, 70), (50, 70), (80, 70)],
-            "Midfielder": [(15, 40), (35, 50), (50, 30), (65, 50), (85, 40)],
+            "Goalkeeper": [(50, 85)],
+            "Defender": [(20, 65), (50, 65), (80, 65)],
+            "Midfielder": [(15, 35), (35, 45), (50, 25), (65, 45), (85, 35)],
             "Forward": [(35, 10), (65, 10)]
         },
         "3-4-3": {
-            "Goalkeeper": [(50, 90)],
-            "Defender": [(20, 70), (50, 70), (80, 70)],
-            "Midfielder": [(25, 45), (45, 50), (55, 50), (75, 45)],
+            "Goalkeeper": [(50, 85)],
+            "Defender": [(20, 65), (50, 65), (80, 65)],
+            "Midfielder": [(25, 40), (45, 45), (55, 45), (75, 40)],
             "Forward": [(20, 15), (50, 10), (80, 15)]
         },
         "4-4-2": {
-            "Goalkeeper": [(50, 90)],
-            "Defender": [(15, 70), (35, 75), (65, 75), (85, 70)],
-            "Midfielder": [(20, 45), (40, 50), (60, 50), (80, 45)],
+            "Goalkeeper": [(50, 85)],
+            "Defender": [(15, 65), (35, 70), (65, 70), (85, 65)],
+            "Midfielder": [(20, 40), (40, 45), (60, 45), (80, 40)],
             "Forward": [(35, 15), (65, 15)]
         },
         "4-3-3": {
-            "Goalkeeper": [(50, 90)],
-            "Defender": [(15, 70), (35, 75), (65, 75), (85, 70)],
-            "Midfielder": [(30, 45), (50, 50), (70, 45)],
+            "Goalkeeper": [(50, 85)],
+            "Defender": [(15, 65), (35, 70), (65, 70), (85, 65)],
+            "Midfielder": [(30, 40), (50, 45), (70, 40)],
             "Forward": [(20, 15), (50, 10), (80, 15)]
         },
         "5-3-2": {
-            "Goalkeeper": [(50, 90)],
-            "Defender": [(10, 65), (25, 75), (50, 70), (75, 75), (90, 65)],
-            "Midfielder": [(30, 45), (50, 40), (70, 45)],
+            "Goalkeeper": [(50, 85)],
+            "Defender": [(10, 60), (25, 70), (50, 65), (75, 70), (90, 60)],
+            "Midfielder": [(30, 40), (50, 35), (70, 40)],
             "Forward": [(35, 15), (65, 15)]
         }
     }
@@ -607,7 +619,8 @@ def create_field_visualization(xi_players, formation, captain, vice_captain, ben
             players_by_pos[pos] = []
         players_by_pos[pos].append(player)
     
-    # Place players on field
+    # Create player positions HTML
+    players_html = ""
     for position, pos_coords in coords.items():
         if position in players_by_pos:
             players = players_by_pos[position]
@@ -615,39 +628,178 @@ def create_field_visualization(xi_players, formation, captain, vice_captain, ben
                 if i < len(pos_coords):
                     x, y = pos_coords[i]
                     
-                    # Check if captain or vice-captain
-                    css_class = "player-position"
+                    # Determine badge style
                     if player['web_name'] == captain['web_name']:
-                        css_class += " captain-badge"
+                        badge_style = "background: #ffd700 !important; color: #000 !important; border-color: #ffd700 !important;"
+                        badge_text = "👑"
                     elif player['web_name'] == vice_captain['web_name']:
-                        css_class += " vice-captain-badge"
+                        badge_style = "background: #c0c0c0 !important; color: #000 !important; border-color: #c0c0c0 !important;"
+                        badge_text = "🥈"
+                    else:
+                        badge_style = "background: white; color: #37003c; border-color: #37003c;"
+                        badge_text = ""
                     
-                    field_html += f"""
-                    <div class="{css_class}" style="left: {x}%; top: {y}%;">
-                        {player['web_name']}<br>
+                    players_html += f"""
+                    <div style="
+                        position: absolute;
+                        left: {x}%;
+                        top: {y}%;
+                        transform: translate(-50%, -50%);
+                        {badge_style}
+                        border: 2px solid;
+                        border-radius: 25px;
+                        padding: 8px 12px;
+                        text-align: center;
+                        font-weight: bold;
+                        font-size: 11px;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                        min-width: 70px;
+                        z-index: 10;
+                    ">
+                        {badge_text}<br>
+                        <strong>{player['web_name']}</strong><br>
                         <small>{player['predicted_points']:.1f}pts</small>
                     </div>
                     """
     
-    field_html += "</div>"
+    # Add players to the field
+    st.markdown(players_html, unsafe_allow_html=True)
     
-    # Add bench
-    field_html += """
-    <div class="bench-container">
-        <h4>🪑 Bench</h4>
-    """
+    # Close the field container
+    st.markdown("</div>", unsafe_allow_html=True)
     
-    for i, player in enumerate(bench_players, 1):
-        field_html += f"""
-        <div class="bench-player">
-            {i}. {player['web_name']} ({player['position']})
-            <br><small>£{player['value']:.1f}M • {player['predicted_points']:.1f}pts</small>
-        </div>
-        """
+    # Create bench section
+    st.markdown("### 🪑 Bench Players")
     
-    field_html += "</div>"
+    # Display bench players in columns for better layout
+    if bench_players:
+        bench_cols = st.columns(min(4, len(bench_players)))
+        for i, player in enumerate(bench_players[:4]):
+            with bench_cols[i]:
+                st.markdown(f"""
+                <div style="
+                    background: #f8f9fa;
+                    border: 2px solid #666;
+                    border-radius: 15px;
+                    padding: 10px;
+                    text-align: center;
+                    margin: 5px 0;
+                ">
+                    <strong>{i+1}. {player['web_name']}</strong><br>
+                    <small>{player['position']}</small><br>
+                    <small>£{player['value']:.1f}M • {player['predicted_points']:.1f}pts</small>
+                </div>
+                """, unsafe_allow_html=True)
+    else:
+        st.info("No bench players to display")
+
+def create_alternative_field_viz(xi_players, formation, captain, vice_captain, bench_players):
+    """Alternative field visualization using Plotly"""
     
-    return field_html
+    # Position coordinates for formations
+    positions = {
+        "3-5-2": {
+            "Goalkeeper": [(0.5, 0.15)],
+            "Defender": [(0.2, 0.35), (0.5, 0.35), (0.8, 0.35)],
+            "Midfielder": [(0.15, 0.65), (0.35, 0.55), (0.5, 0.75), (0.65, 0.55), (0.85, 0.65)],
+            "Forward": [(0.35, 0.9), (0.65, 0.9)]
+        },
+        "3-4-3": {
+            "Goalkeeper": [(0.5, 0.15)],
+            "Defender": [(0.2, 0.35), (0.5, 0.35), (0.8, 0.35)],
+            "Midfielder": [(0.25, 0.6), (0.45, 0.55), (0.55, 0.55), (0.75, 0.6)],
+            "Forward": [(0.2, 0.85), (0.5, 0.9), (0.8, 0.85)]
+        },
+        "4-4-2": {
+            "Goalkeeper": [(0.5, 0.15)],
+            "Defender": [(0.15, 0.35), (0.35, 0.3), (0.65, 0.3), (0.85, 0.35)],
+            "Midfielder": [(0.2, 0.6), (0.4, 0.55), (0.6, 0.55), (0.8, 0.6)],
+            "Forward": [(0.35, 0.85), (0.65, 0.85)]
+        },
+        "4-3-3": {
+            "Goalkeeper": [(0.5, 0.15)],
+            "Defender": [(0.15, 0.35), (0.35, 0.3), (0.65, 0.3), (0.85, 0.35)],
+            "Midfielder": [(0.3, 0.6), (0.5, 0.55), (0.7, 0.6)],
+            "Forward": [(0.2, 0.85), (0.5, 0.9), (0.8, 0.85)]
+        },
+        "5-3-2": {
+            "Goalkeeper": [(0.5, 0.15)],
+            "Defender": [(0.1, 0.4), (0.25, 0.3), (0.5, 0.35), (0.75, 0.3), (0.9, 0.4)],
+            "Midfielder": [(0.3, 0.6), (0.5, 0.65), (0.7, 0.6)],
+            "Forward": [(0.35, 0.85), (0.65, 0.85)]
+        }
+    }
+    
+    formation_name = formation["name"]
+    coords = positions.get(formation_name, positions["3-4-3"])
+    
+    fig = go.Figure()
+    
+    # Add field background
+    fig.add_shape(
+        type="rect",
+        x0=0, y0=0, x1=1, y1=1,
+        fillcolor="rgba(46, 125, 50, 0.3)",
+        line=dict(color="white", width=2)
+    )
+    
+    # Group players by position
+    players_by_pos = {}
+    for player in xi_players:
+        pos = player['position']
+        if pos not in players_by_pos:
+            players_by_pos[pos] = []
+        players_by_pos[pos].append(player)
+    
+    # Add players to the plot
+    for position, pos_coords in coords.items():
+        if position in players_by_pos:
+            players = players_by_pos[position]
+            for i, player in enumerate(players):
+                if i < len(pos_coords):
+                    x, y = pos_coords[i]
+                    
+                    # Determine marker color and symbol
+                    if player['web_name'] == captain['web_name']:
+                        color = 'gold'
+                        symbol = 'star'
+                        size = 25
+                    elif player['web_name'] == vice_captain['web_name']:
+                        color = 'silver'
+                        symbol = 'diamond'
+                        size = 23
+                    else:
+                        color = 'white'
+                        symbol = 'circle'
+                        size = 20
+                    
+                    fig.add_trace(go.Scatter(
+                        x=[x], y=[y],
+                        mode='markers+text',
+                        marker=dict(
+                            color=color,
+                            size=size,
+                            symbol=symbol,
+                            line=dict(color='#37003c', width=2)
+                        ),
+                        text=f"{player['web_name']}<br>{player['predicted_points']:.1f}pts",
+                        textposition="middle center",
+                        textfont=dict(size=9, color='black'),
+                        showlegend=False,
+                        hoverinfo='text',
+                        hovertext=f"{player['web_name']}<br>{player['position']}<br>£{player['value']:.1f}M<br>{player['predicted_points']:.1f} predicted points"
+                    ))
+    
+    fig.update_layout(
+        title=f"Formation: {formation_name}",
+        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False, range=[0, 1]),
+        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False, range=[0, 1]),
+        plot_bgcolor='rgba(46, 125, 50, 0.8)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        height=500
+    )
+    
+    return fig
 
 def main():
     """Main application"""
