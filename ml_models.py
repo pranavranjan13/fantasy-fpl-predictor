@@ -344,9 +344,9 @@ Always aim to improve the user's FPL performance through strategic, well-reasone
             },
             json={
                 "model": "gemini-2.5-pro",
-                "max_tokens": 800,
+                "max_tokens": 500,
                 "messages": messages,
-                "temperature": 0.5
+                "temperature": 0.2
             }
         )
         
