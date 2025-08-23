@@ -1,4 +1,376 @@
-import streamlit as st
+# Field visualization - prevent reset issue
+                                viz_option = st.radio("Field View:", ["Interactive", "Simple"], horizontal=True, key="squad_viz")
+                                
+                                # Store XI result to prevent reset
+                                if 'squad_xi_result' not in st.session_state:
+                                    st.session_state.squad_xi_result = xi_result
+                                
+                                stored_result = st.session_state.squad_xi_result
+                                
+                                if viz_option == "Interactive":
+                                    fig = create_alternative_field_viz(
+                                        stored_result['players'], formation, captain, vice_captain, bench_players
+                                    )
+                                    st.plotly_chart(fig, use_container_width=True)
+                                    
+                                    # Bench for interactive mode
+                                    st.markdown("### 🪑 **Bench Players**")
+                                    if bench_players:
+                                        bench_cols = st.columns(4)
+                                        for i in range(min(4, len(bench_players))):
+                                            player = bench_players[i]
+                                            with bench_cols[i]:
+                                                st.markdown(f"""
+                                                <div style="
+                                                    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+                                                    border: 3px solid #495057;
+                                                    border-radius: 15px;
+                                                    padding: 15px 10px;
+                                                    text-align: center;
+                                                    margin: 5px;
+                                                    box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+                                                ">
+                                                    <div style="font-size: 16px; font-weight: bold; color: #000000;">
+                                                        {i+1}
+                                                    </div>
+                                                    <div style="font-weight: bold; color: #000000; margin: 5px 0; font-size: 12px;">
+                                                        {player.get('web_name', 'Unknown')}
+                                                    </div>
+                                                    <div style="color: #495057; font-size: 10px; font-weight: bold;">
+                                                        {player.get('position', 'Unknown')}
+                                                    </div>
+                                                    <div style="color: #28a745; font-weight: bold; font-size: 10px;">
+                                                        £{safe_float(player.get('value', 0)):.1f}M
+                                                    </div>
+                                                    <div style="color: #007bff; font-weight: bold; font-size: 10px;">
+                                                        {safe_float(player.get('predicted_points', 0)):.1f} pts
+                                                    </div>
+                                                </div>
+                                                """, unsafe_allow_html=True)
+                                    else:
+                                        st.info("No bench players available")
+                                else:
+                                    create_field_visualization(
+                                        stored_result['players'], formation, captain, vice_captain, bench_players
+                                    )
+                            
+                            with col2:
+                                st.subheader("📊 Squad Statistics")
+                                
+                                total_value = squad_data['value'].sum()
+                                avg_predicted = squad_data['predicted_points'].mean()
+                                reliable_starters = sum(1 for _, p in squad_data.iterrows() if p['starting_probability'] > 0.8)
+                                
+                                st.metric("Squad Value", f"£{total_value:.1f}M")
+                                st.metric("Avg Predicted Points", f"{avg_predicted:.1f}")
+                                st.metric("Reliable Starters", f"{reliable_starters}/15")
+                                st.metric("XI Total Predicted", f"{xi_result['total_predicted_points']:.1f}")
+                                
+                                # Squad strengths/weaknesses
+                                st.subheader("🔍 Squad Analysis")
+                                
+                                # Position strength analysis
+                                pos_strength = {}
+                                for pos in ['Goalkeeper', 'Defender', 'Midfielder', 'Forward']:
+                                    pos_players = squad_data[squad_data['position'] == pos]
+                                    if len(pos_players) > 0:
+                                        avg_pred = pos_players['predicted_points'].mean()
+                                        pos_strength[pos] = avg_pred
+                                
+                                if pos_strength:
+                                    strongest_pos = max(pos_strength.items(), key=lambda x: x[1])
+                                    weakest_pos = min(pos_strength.items(), key=lambda x: x[1])
+                                    
+                                    st.success(f"💪 **Strongest:** {strongest_pos[0]} ({strongest_pos[1]:.1f} avg)")
+                                    st.warning(f"⚠️ **Weakest:** {weakest_pos[0]} ({weakest_pos[1]:.1f} avg)")
+                                
+                                # Risk analysis
+                                rotation_risk = sum(1 for _, p in squad_data.iterrows() if p['starting_probability'] < 0.7)
+                                if rotation_risk > 3:
+                                    st.error(f"🚨 **High Risk:** {rotation_risk} rotation risks")
+                                else:
+                                    st.success(f"✅ **Low Risk:** {rotation_risk} rotation risks")
+                        else:
+                            st.error("❌ Could not analyze your squad. Please check player selections.")
+                    else:
+                        st.error("❌ No valid players found in your selection")
+        else:
+            st.warning(f"⚠️ Please select at least 11 players (currently: {len(current_squad)})")
+    
+    elif page == "FPL Strategy Chat":
+        st.header("💬 Enhanced FPL Strategy Chat")
+        
+        # Initialize session state for chat (fixed infinite loop issue)
+        if 'chat_messages' not in st.session_state:
+            st.session_state.chat_messages = [
+                {"role": "assistant", "content": "👋 Hello! I'm your enhanced FPL AI Assistant. I can help with team selection, transfers, captaincy, formations, and strategy. What would you like to know?"}
+            ]
+        
+        if 'chat_input_counter' not in st.session_state:
+            st.session_state.chat_input_counter = 0
+        
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            # Display chat messages
+            st.markdown('<div class="chat-container">', unsafe_allow_html=True)
+            
+            for message in st.session_state.chat_messages:
+                if message["role"] == "user":
+                    st.markdown(
+                        f'<div class="user-message"><strong>You:</strong> {message["content"]}</div>',
+                        unsafe_allow_html=True
+                    )
+                else:
+                    st.markdown(
+                        f'<div class="ai-message"><strong>🤖 FPL AI:</strong><br>{message["content"]}</div>',
+                        unsafe_allow_html=True
+                    )
+            
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            # User input with unique key to prevent infinite loop
+            user_input = st.text_input(
+                "Ask your FPL question:", 
+                key=f"chat_input_{st.session_state.chat_input_counter}",
+                placeholder="e.g., Who should I captain this week?"
+            )
+            
+            col_send, col_clear = st.columns([1, 1])
+            
+            with col_send:
+                if st.button("Send 📤", type="primary", key="send_message") and user_input.strip():
+                    with st.spinner("🤖 AI is analyzing..."):
+                        # Get AI response
+                        context = {
+                            'total_players': len(players_df),
+                            'top_scorers': players_df.nlargest(3, 'total_points')['web_name'].tolist(),
+                            'current_gw': 25  # You can make this dynamic
+                        }
+                        
+                        ai_response = chatbot.get_ai_response(user_input, context)
+                        
+                        # Add to chat history
+                        st.session_state.chat_messages.append({"role": "user", "content": user_input})
+                        st.session_state.chat_messages.append({"role": "assistant", "content": ai_response})
+                        
+                        # Add to chatbot's internal history
+                        chatbot.add_to_history(user_input, ai_response)
+                        
+                        # Update counter to reset input field
+                        st.session_state.chat_input_counter += 1
+                        
+                        # Rerun to show new messages
+                        st.rerun()
+            
+            with col_clear:
+                if st.button("Clear Chat 🗑️", key="clear_chat"):
+                    st.session_state.chat_messages = [
+                        {"role": "assistant", "content": "👋 Chat cleared! How can I help you with your FPL strategy?"}
+                    ]
+                    chatbot.chat_history = []
+                    st.session_state.chat_input_counter += 1
+                    st.rerun()
+        
+        with col2:
+            st.subheader("💡 Quick Questions")
+            
+            # Quick question buttons that work properly
+            quick_questions = [
+                "Who should I captain this week?",
+                "When should I use my wildcard?",
+                "What's the best formation for my team?",
+                "How should I plan my transfers?",
+                "Which players are good differentials?",
+                "What's the current chip strategy?",
+                "Who are the best value picks?",
+                "How do I improve my rank?"
+            ]
+            
+            for i, question in enumerate(quick_questions):
+                if st.button(f"❓ {question}", key=f"quick_q_{i}"):
+                    with st.spinner("🤖 Generating response..."):
+                        context = {
+                            'quick_question': True,
+                            'top_performers': players_df.nlargest(5, 'predicted_points')['web_name'].tolist()
+                        }
+                        
+                        ai_response = chatbot.get_ai_response(question, context)
+                        
+                        # Add to chat
+                        st.session_state.chat_messages.append({"role": "user", "content": question})
+                        st.session_state.chat_messages.append({"role": "assistant", "content": ai_response})
+                        
+                        # Add to chatbot's internal history
+                        chatbot.add_to_history(question, ai_response)
+                        
+                        st.rerun()
+            
+            st.subheader("⚙️ Chat Info")
+            st.info(f"""
+            **Enhanced Features:**
+            • {'🟢 AI API Active' if api_key else '🟡 Knowledge Base Active'}
+            • Context-aware responses
+            • FPL-specific expertise
+            • Historical analysis integration
+            • Current season data
+            
+            **Total Messages:** {len(st.session_state.chat_messages)}
+            """)
+    
+    elif page == "Player Comparison":
+        st.header("⚖️ Enhanced Player Comparison")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            player1 = st.selectbox("Select Player 1:", sorted(players_df['web_name'].unique()), key="player1_select")
+        
+        with col2:
+            player2 = st.selectbox("Select Player 2:", sorted(players_df['web_name'].unique()), key="player2_select")
+        
+        if player1 and player2 and player1 != player2:
+            p1_data = players_df[players_df['web_name'] == player1].iloc[0]
+            p2_data = players_df[players_df['web_name'] == player2].iloc[0]
+            
+            st.subheader("📊 Enhanced Comparison Analysis")
+            
+            # Create comprehensive comparison
+            comparison_metrics = {
+                'Metric': [
+                    'Current Points', 'Price (£M)', 'Predicted Next GW', 'Value Efficiency',
+                    'Form Score', 'Starting Probability', 'Minutes Played', 'Goals + Assists',
+                    'Historical Weight', 'Fixture Adjustment'
+                ],
+                player1: [
+                    safe_float(p1_data.get('total_points', 0)),
+                    safe_float(p1_data.get('value', 0)),
+                    safe_float(p1_data.get('predicted_points', 0)),
+                    safe_float(p1_data.get('value_efficiency', 0)),
+                    safe_float(p1_data.get('form_trend', 0)),
+                    safe_float(p1_data.get('starting_probability', 0)),
+                    safe_float(p1_data.get('minutes', 0)),
+                    safe_float(p1_data.get('goals_scored', 0)) + safe_float(p1_data.get('assists', 0)),
+                    safe_float(p1_data.get('historical_weight', 0)),
+                    safe_float(p1_data.get('fixture_adjustment', 0))
+                ],
+                player2: [
+                    safe_float(p2_data.get('total_points', 0)),
+                    safe_float(p2_data.get('value', 0)),
+                    safe_float(p2_data.get('predicted_points', 0)),
+                    safe_float(p2_data.get('value_efficiency', 0)),
+                    safe_float(p2_data.get('form_trend', 0)),
+                    safe_float(p2_data.get('starting_probability', 0)),
+                    safe_float(p2_data.get('minutes', 0)),
+                    safe_float(p2_data.get('goals_scored', 0)) + safe_float(p2_data.get('assists', 0)),
+                    safe_float(p2_data.get('historical_weight', 0)),
+                    safe_float(p2_data.get('fixture_adjustment', 0))
+                ]
+            }
+            
+            comparison_df = pd.DataFrame(comparison_metrics)
+            st.dataframe(comparison_df, use_container_width=True)
+            
+            # AI-powered comparison analysis
+            col_rec, col_viz = st.columns([1, 1])
+            
+            with col_rec:
+                st.subheader("🤖 AI Recommendation")
+                
+                # Create comparison context for AI
+                comparison_context = f"""
+                Player 1: {player1} - {p1_data['position']} - £{p1_data['value']:.1f}M
+                Current Points: {p1_data.get('total_points', 0)}
+                Predicted Next GW: {p1_data.get('predicted_points', 0):.1f}
+                Value Efficiency: {p1_data.get('value_efficiency', 0):.2f}
+                
+                Player 2: {player2} - {p2_data['position']} - £{p2_data['value']:.1f}M  
+                Current Points: {p2_data.get('total_points', 0)}
+                Predicted Next GW: {p2_data.get('predicted_points', 0):.1f}
+                Value Efficiency: {p2_data.get('value_efficiency', 0):.2f}
+                """
+                
+                if st.button("🔍 Get AI Analysis", type="primary"):
+                    with st.spinner("🤖 AI analyzing players..."):
+                        ai_analysis = chatbot.get_ai_response(
+                            f"Compare these two FPL players and recommend which is better: {comparison_context}",
+                            {"comparison": True}
+                        )
+                        st.markdown(ai_analysis)
+                
+                # Quick comparison insights
+                st.subheader("⚡ Quick Insights")
+                
+                # Better predicted points
+                if p1_data.get('predicted_points', 0) > p2_data.get('predicted_points', 0):
+                    st.success(f"🎯 **Next GW:** {player1} predicted higher ({p1_data.get('predicted_points', 0):.1f} vs {p2_data.get('predicted_points', 0):.1f})")
+                else:
+                    st.success(f"🎯 **Next GW:** {player2} predicted higher ({p2_data.get('predicted_points', 0):.1f} vs {p1_data.get('predicted_points', 0):.1f})")
+                
+                # Better value
+                if p1_data.get('value_efficiency', 0) > p2_data.get('value_efficiency', 0):
+                    st.info(f"💰 **Value:** {player1} better efficiency ({p1_data.get('value_efficiency', 0):.2f})")
+                else:
+                    st.info(f"💰 **Value:** {player2} better efficiency ({p2_data.get('value_efficiency', 0):.2f})")
+                
+                # Starting probability
+                if p1_data.get('starting_probability', 0) > p2_data.get('starting_probability', 0):
+                    st.info(f"⚡ **Reliability:** {player1} more likely to start ({p1_data.get('starting_probability', 0):.0%})")
+                else:
+                    st.info(f"⚡ **Reliability:** {player2} more likely to start ({p2_data.get('starting_probability', 0):.0%})")
+            
+            with col_viz:
+                st.subheader("📊 Visual Comparison")
+                
+                # Radar chart comparison
+                metrics_for_radar = ['predicted_points', 'value_efficiency', 'form_trend', 'starting_probability']
+                
+                fig = go.Figure()
+                
+                # Normalize values for radar chart
+                p1_values = []
+                p2_values = []
+                labels = []
+                
+                for metric in metrics_for_radar:
+                    max_val = max(p1_data.get(metric, 0), p2_data.get(metric, 0))
+                    if max_val > 0:
+                        p1_norm = p1_data.get(metric, 0) / max_val
+                        p2_norm = p2_data.get(metric, 0) / max_val
+                    else:
+                        p1_norm = p2_norm = 0
+                    
+                    p1_values.append(p1_norm)
+                    p2_values.append(p2_norm)
+                    labels.append(metric.replace('_', ' ').title())
+                
+                fig.add_trace(go.Scatterpolar(
+                    r=p1_values,
+                    theta=labels,
+                    fill='toself',
+                    name=player1,
+                    line_color='#37003c'
+                ))
+                
+                fig.add_trace(go.Scatterpolar(
+                    r=p2_values,
+                    theta=labels,
+                    fill='toself',
+                    name=player2,
+                    line_color='#00ff87'
+                ))
+                
+                fig.update_layout(
+                    polar=dict(radialaxis=dict(visible=True, range=[0, 1])),
+                    showlegend=True,
+                    title="Player Comparison Radar"
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+
+if __name__ == "__main__":
+    main()
+                                import streamlit as st
 import pandas as pd
 import numpy as np
 import requests
@@ -559,19 +931,6 @@ def create_field_visualization(xi_players, formation, captain, vice_captain, ben
     
     st.markdown("### 🏟️ Formation Layout")
     
-    # Create field container with better styling
-    st.markdown("""
-    <div style="
-        background: linear-gradient(to bottom, #4CAF50, #2E7D32);
-        padding: 30px;
-        border-radius: 15px;
-        margin: 20px 0;
-        min-height: 600px;
-        position: relative;
-        border: 3px solid white;
-    ">
-    """, unsafe_allow_html=True)
-    
     # Group players by position for display
     players_by_pos = {
         'Goalkeeper': [],
@@ -585,123 +944,167 @@ def create_field_visualization(xi_players, formation, captain, vice_captain, ben
         if pos in players_by_pos:
             players_by_pos[pos].append(player)
     
-    # Display formation name
-    st.markdown(f"""
-    <div style="text-align: center; color: white; font-size: 20px; font-weight: bold; margin-bottom: 20px;">
-        Formation: {formation['name']}
-    </div>
-    """, unsafe_allow_html=True)
+    # Display formation info
+    st.info(f"**Formation:** {formation['name']} | **Total Predicted Points:** {sum(safe_float(p.get('predicted_points', 0)) for p in xi_players):.1f}")
     
-    # Display players by position with proper spacing
-    st.markdown("#### **⚽ FORWARDS**")
+    # Display players by position with better visibility
+    st.markdown("#### ⚽ **FORWARDS**")
     if players_by_pos['Forward']:
         fwd_cols = st.columns(len(players_by_pos['Forward']))
         for i, player in enumerate(players_by_pos['Forward']):
             with fwd_cols[i]:
                 badge = ""
                 bg_color = "#ffffff"
-                text_color = "#37003c"
+                text_color = "#000000"  # Always black for visibility
+                border_color = "#37003c"
                 
                 if player['web_name'] == captain['web_name']:
-                    badge = "👑 (C)"
+                    badge = "👑 (C) "
                     bg_color = "#ffd700"
-                    text_color = "#000000"
+                    border_color = "#b8860b"
                 elif player['web_name'] == vice_captain['web_name']:
-                    badge = "🥈 (VC)"
+                    badge = "🥈 (VC) "
                     bg_color = "#c0c0c0"
-                    text_color = "#000000"
+                    border_color = "#808080"
                 
                 st.markdown(f"""
                 <div style="
                     background-color: {bg_color};
                     color: {text_color};
-                    border: 2px solid #37003c;
-                    border-radius: 50px;
-                    padding: 15px;
+                    border: 3px solid {border_color};
+                    border-radius: 20px;
+                    padding: 20px 15px;
                     text-align: center;
                     font-weight: bold;
-                    margin: 10px 0;
-                    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+                    margin: 10px 5px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                    min-height: 100px;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
                 ">
-                    {badge}<br>
-                    <strong>{player['web_name']}</strong><br>
-                    <small>{player['predicted_points']:.1f} pts</small>
+                    <div style="font-size: 16px; color: {text_color}; margin-bottom: 5px;">
+                        {badge}
+                    </div>
+                    <div style="font-size: 14px; font-weight: bold; color: {text_color}; margin-bottom: 8px;">
+                        {player['web_name']}
+                    </div>
+                    <div style="font-size: 12px; color: #2c5aa0; font-weight: bold;">
+                        {safe_float(player.get('predicted_points', 0)):.1f} pts
+                    </div>
+                    <div style="font-size: 10px; color: #28a745; margin-top: 3px;">
+                        £{safe_float(player.get('value', 0)):.1f}M
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
+    else:
+        st.write("No forwards selected")
     
-    st.markdown("#### **🎯 MIDFIELDERS**")
+    st.markdown("#### 🎯 **MIDFIELDERS**")
     if players_by_pos['Midfielder']:
         mid_cols = st.columns(len(players_by_pos['Midfielder']))
         for i, player in enumerate(players_by_pos['Midfielder']):
             with mid_cols[i]:
                 badge = ""
                 bg_color = "#ffffff"
-                text_color = "#37003c"
+                text_color = "#000000"  # Always black for visibility
+                border_color = "#37003c"
                 
                 if player['web_name'] == captain['web_name']:
-                    badge = "👑 (C)"
+                    badge = "👑 (C) "
                     bg_color = "#ffd700"
-                    text_color = "#000000"
+                    border_color = "#b8860b"
                 elif player['web_name'] == vice_captain['web_name']:
-                    badge = "🥈 (VC)"
+                    badge = "🥈 (VC) "
                     bg_color = "#c0c0c0"
-                    text_color = "#000000"
+                    border_color = "#808080"
                 
                 st.markdown(f"""
                 <div style="
                     background-color: {bg_color};
                     color: {text_color};
-                    border: 2px solid #37003c;
-                    border-radius: 50px;
-                    padding: 15px;
+                    border: 3px solid {border_color};
+                    border-radius: 20px;
+                    padding: 20px 15px;
                     text-align: center;
                     font-weight: bold;
-                    margin: 10px 0;
-                    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+                    margin: 10px 5px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                    min-height: 100px;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
                 ">
-                    {badge}<br>
-                    <strong>{player['web_name']}</strong><br>
-                    <small>{player['predicted_points']:.1f} pts</small>
+                    <div style="font-size: 16px; color: {text_color}; margin-bottom: 5px;">
+                        {badge}
+                    </div>
+                    <div style="font-size: 14px; font-weight: bold; color: {text_color}; margin-bottom: 8px;">
+                        {player['web_name']}
+                    </div>
+                    <div style="font-size: 12px; color: #2c5aa0; font-weight: bold;">
+                        {safe_float(player.get('predicted_points', 0)):.1f} pts
+                    </div>
+                    <div style="font-size: 10px; color: #28a745; margin-top: 3px;">
+                        £{safe_float(player.get('value', 0)):.1f}M
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
+    else:
+        st.write("No midfielders selected")
     
-    st.markdown("#### **🛡️ DEFENDERS**")
+    st.markdown("#### 🛡️ **DEFENDERS**")
     if players_by_pos['Defender']:
         def_cols = st.columns(len(players_by_pos['Defender']))
         for i, player in enumerate(players_by_pos['Defender']):
             with def_cols[i]:
                 badge = ""
                 bg_color = "#ffffff"
-                text_color = "#37003c"
+                text_color = "#000000"  # Always black for visibility
+                border_color = "#37003c"
                 
                 if player['web_name'] == captain['web_name']:
-                    badge = "👑 (C)"
+                    badge = "👑 (C) "
                     bg_color = "#ffd700"
-                    text_color = "#000000"
+                    border_color = "#b8860b"
                 elif player['web_name'] == vice_captain['web_name']:
-                    badge = "🥈 (VC)"
+                    badge = "🥈 (VC) "
                     bg_color = "#c0c0c0"
-                    text_color = "#000000"
+                    border_color = "#808080"
                 
                 st.markdown(f"""
                 <div style="
                     background-color: {bg_color};
                     color: {text_color};
-                    border: 2px solid #37003c;
-                    border-radius: 50px;
-                    padding: 15px;
+                    border: 3px solid {border_color};
+                    border-radius: 20px;
+                    padding: 20px 15px;
                     text-align: center;
                     font-weight: bold;
-                    margin: 10px 0;
-                    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+                    margin: 10px 5px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                    min-height: 100px;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
                 ">
-                    {badge}<br>
-                    <strong>{player['web_name']}</strong><br>
-                    <small>{player['predicted_points']:.1f} pts</small>
+                    <div style="font-size: 16px; color: {text_color}; margin-bottom: 5px;">
+                        {badge}
+                    </div>
+                    <div style="font-size: 14px; font-weight: bold; color: {text_color}; margin-bottom: 8px;">
+                        {player['web_name']}
+                    </div>
+                    <div style="font-size: 12px; color: #2c5aa0; font-weight: bold;">
+                        {safe_float(player.get('predicted_points', 0)):.1f} pts
+                    </div>
+                    <div style="font-size: 10px; color: #28a745; margin-top: 3px;">
+                        £{safe_float(player.get('value', 0)):.1f}M
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
+    else:
+        st.write("No defenders selected")
     
-    st.markdown("#### **🥅 GOALKEEPER**")
+    st.markdown("#### 🥅 **GOALKEEPER**")
     if players_by_pos['Goalkeeper']:
         # Center the goalkeeper
         _, gk_col, _ = st.columns([1, 1, 1])
@@ -709,40 +1112,53 @@ def create_field_visualization(xi_players, formation, captain, vice_captain, ben
             player = players_by_pos['Goalkeeper'][0]
             badge = ""
             bg_color = "#ffffff"
-            text_color = "#37003c"
+            text_color = "#000000"  # Always black for visibility
+            border_color = "#37003c"
             
             if player['web_name'] == captain['web_name']:
-                badge = "👑 (C)"
+                badge = "👑 (C) "
                 bg_color = "#ffd700"
-                text_color = "#000000"
+                border_color = "#b8860b"
             elif player['web_name'] == vice_captain['web_name']:
-                badge = "🥈 (VC)"
+                badge = "🥈 (VC) "
                 bg_color = "#c0c0c0"
-                text_color = "#000000"
+                border_color = "#808080"
             
             st.markdown(f"""
             <div style="
                 background-color: {bg_color};
                 color: {text_color};
-                border: 2px solid #37003c;
-                border-radius: 50px;
-                padding: 15px;
+                border: 3px solid {border_color};
+                border-radius: 20px;
+                padding: 20px 15px;
                 text-align: center;
                 font-weight: bold;
-                margin: 10px 0;
-                box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+                margin: 10px 5px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                min-height: 100px;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
             ">
-                {badge}<br>
-                <strong>{player['web_name']}</strong><br>
-                <small>{player['predicted_points']:.1f} pts</small>
+                <div style="font-size: 16px; color: {text_color}; margin-bottom: 5px;">
+                    {badge}
+                </div>
+                <div style="font-size: 14px; font-weight: bold; color: {text_color}; margin-bottom: 8px;">
+                    {player['web_name']}
+                </div>
+                <div style="font-size: 12px; color: #2c5aa0; font-weight: bold;">
+                    {safe_float(player.get('predicted_points', 0)):.1f} pts
+                </div>
+                <div style="font-size: 10px; color: #28a745; margin-top: 3px;">
+                    £{safe_float(player.get('value', 0)):.1f}M
+                </div>
             </div>
             """, unsafe_allow_html=True)
+    else:
+        st.write("No goalkeeper selected")
     
-    # Close field container
-    st.markdown("</div>", unsafe_allow_html=True)
-    
-    # Display bench with better formatting
-    st.markdown("### 🪑 Bench Players")
+    # Display bench with better formatting and visibility
+    st.markdown("### 🪑 **Bench Players**")
     
     if bench_players and len(bench_players) > 0:
         # Create 4 columns for bench players
@@ -754,27 +1170,30 @@ def create_field_visualization(xi_players, formation, captain, vice_captain, ben
                 st.markdown(f"""
                 <div style="
                     background: linear-gradient(135deg, #f8f9fa, #e9ecef);
-                    border: 2px solid #6c757d;
+                    border: 3px solid #495057;
                     border-radius: 15px;
-                    padding: 15px;
+                    padding: 20px 10px;
                     text-align: center;
                     margin: 10px 0;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                    min-height: 120px;
+                    box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+                    min-height: 140px;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
                 ">
-                    <div style="font-size: 18px; font-weight: bold; color: #495057;">
+                    <div style="font-size: 20px; font-weight: bold; color: #000000; margin-bottom: 5px;">
                         {i+1}
                     </div>
-                    <div style="font-weight: bold; color: #212529; margin: 5px 0;">
+                    <div style="font-weight: bold; color: #000000; margin-bottom: 8px; font-size: 14px;">
                         {player.get('web_name', 'Unknown')}
                     </div>
-                    <div style="color: #6c757d; font-size: 12px; margin: 3px 0;">
+                    <div style="color: #6c757d; font-size: 12px; margin: 3px 0; font-weight: bold;">
                         {player.get('position', 'Unknown')}
                     </div>
-                    <div style="color: #28a745; font-weight: bold; font-size: 11px;">
+                    <div style="color: #28a745; font-weight: bold; font-size: 12px; margin: 2px 0;">
                         £{safe_float(player.get('value', 0)):.1f}M
                     </div>
-                    <div style="color: #007bff; font-weight: bold; font-size: 11px;">
+                    <div style="color: #007bff; font-weight: bold; font-size: 12px;">
                         {safe_float(player.get('predicted_points', 0)):.1f} pts
                     </div>
                 </div>
@@ -1008,22 +1427,79 @@ def main():
                             with col_c2:
                                 st.success(f"🎖️ **Vice-Captain:** {vice_captain['web_name']} ({vice_captain['predicted_points']:.1f} pts)")
                             
-                            # Field visualization
+                            # Field visualization - Fix the reset issue by storing result in session state
                             st.subheader("🏟️ Team Formation Visualization")
                             
-                            # Create two visualization options
-                            viz_option = st.radio("Choose visualization:", ["Interactive Field", "Simple Layout"], horizontal=True)
+                            # Store the XI result in session state to prevent reset
+                            if 'current_xi_result' not in st.session_state or st.session_state.get('regenerate_team', False):
+                                st.session_state.current_xi_result = xi_result
+                                st.session_state.regenerate_team = False
+                            
+                            # Use stored result to prevent reset
+                            stored_xi = st.session_state.current_xi_result
+                            stored_formation = stored_xi['formation']
+                            stored_captain = stored_xi['captain']
+                            stored_vice_captain = stored_xi['vice_captain']
+                            stored_bench_players = stored_xi.get('bench', [])
+                            
+                            # Create visualization options without resetting data
+                            viz_option = st.radio(
+                                "Choose visualization:", 
+                                ["Interactive Field", "Simple Layout"], 
+                                horizontal=True,
+                                key="team_viz_option"
+                            )
                             
                             if viz_option == "Interactive Field":
                                 # Use Plotly for interactive visualization
                                 fig = create_alternative_field_viz(
-                                    xi_result['players'], formation, captain, vice_captain, bench_players
+                                    stored_xi['players'], stored_formation, stored_captain, 
+                                    stored_vice_captain, stored_bench_players
                                 )
                                 st.plotly_chart(fig, use_container_width=True)
+                                
+                                # Show bench separately for interactive mode
+                                st.markdown("### 🪑 **Bench Players**")
+                                if stored_bench_players:
+                                    bench_cols = st.columns(4)
+                                    for i in range(min(4, len(stored_bench_players))):
+                                        player = stored_bench_players[i]
+                                        with bench_cols[i]:
+                                            st.markdown(f"""
+                                            <div style="
+                                                background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+                                                border: 3px solid #495057;
+                                                border-radius: 15px;
+                                                padding: 15px 10px;
+                                                text-align: center;
+                                                margin: 5px;
+                                                box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+                                                min-height: 120px;
+                                            ">
+                                                <div style="font-size: 18px; font-weight: bold; color: #000000;">
+                                                    {i+1}
+                                                </div>
+                                                <div style="font-weight: bold; color: #000000; margin: 8px 0; font-size: 13px;">
+                                                    {player.get('web_name', 'Unknown')}
+                                                </div>
+                                                <div style="color: #495057; font-size: 11px; font-weight: bold;">
+                                                    {player.get('position', 'Unknown')}
+                                                </div>
+                                                <div style="color: #28a745; font-weight: bold; font-size: 11px;">
+                                                    £{safe_float(player.get('value', 0)):.1f}M
+                                                </div>
+                                                <div style="color: #007bff; font-weight: bold; font-size: 11px;">
+                                                    {safe_float(player.get('predicted_points', 0)):.1f} pts
+                                                </div>
+                                            </div>
+                                            """, unsafe_allow_html=True)
+                                else:
+                                    st.info("No bench players available")
                             else:
-                                # Use the improved HTML visualization
+                                # Use the improved simple layout
                                 create_field_visualization(
-                                    xi_result['players'], formation, captain, vice_captain, bench_players
+                                    stored_xi['players'], stored_formation, stored_captain, 
+                                    stored_vice_captain, stored_bench_players
                                 )
                             
                             # Detailed squad analysis
